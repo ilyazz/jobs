@@ -279,9 +279,10 @@ The output channel is closed when:
 1. The `follow` mode is off, and the reader reaches the end of the job output file
 2. The job ended
 3. The passed context object becomes `Done`
+4. Internal error encountered, i.e. the jout output file becomes unavailable
 
 -------
-Job processes have the supervisor process as a parent. If it terminates, all jobs are stopped and created artifacts, like disk files or cgroups controllers remains. It's not possible to restore job states after the supervisor starts again. 
+Job processes have the server process as a parent. If it terminates, all jobs are stopped and created artifacts, like disk files or cgroups controllers remains. It's not possible to restore job states after the supervisor starts again. 
 
 
 ## Server
@@ -322,7 +323,9 @@ Server UX is out of scope of this project. It is delivered as a simple binary, r
 ### Authentication
 Use the client certificate Distinguished Name (DN) as the client ID
 ### Authorization
-Jobs are accessible for clients with the same ID they were started with. 
+The following rules apply:
+   - A client may access jobs started with the same client ID
+   - There are "super-users", who have full access to all jobs. The list of identities of super-users is stored in a config file on server and is read only when the server starts
 
 ## Target platforms
 ### Server
