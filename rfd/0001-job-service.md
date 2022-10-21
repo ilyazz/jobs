@@ -202,7 +202,7 @@ type Supervisor interface {
 	// InspectJob returns details about the job
 	InspectJob(ctx context.Context, id ID) (Status, error)
 	// JobOutput returns the combined stdout/stderr output of a job, along the job status
-	JobOutput(ctx context.Context, id ID, o *OutputOptions) (Status, <-chan []byte, error)
+	JobOutput(ctx context.Context, id ID, o *OutputOptions) (Status, io.Reader, error)
 
 	// Stop stops the supervisor and all its jobs
 	Stop() error
@@ -275,11 +275,6 @@ After the job is stopped, its handler is still in memory, output is on disk and 
 
 *Logs* operation starts a new goroutine tha opens the job output file in read-only mode and copies its content to a channel of `[]byte`. Job output can be binary, so we work with raw bytes instead of string.
 The channel is returned to the client. An option is passed, allowing to use the 'follow' mode, in which when the reader reaches the end of the output file, it waits for more data.  
-The output channel is closed when:
-1. The `follow` mode is off, and the reader reaches the end of the job output file
-2. The job ended
-3. The passed context object becomes `Done`
-4. Internal error encountered, i.e. the jout output file becomes unavailable
 
 -------
 Job processes have the server process as a parent. If it terminates, all jobs are stopped and created artifacts, like disk files or cgroups controllers remains. It's not possible to restore job states after the supervisor starts again. 
