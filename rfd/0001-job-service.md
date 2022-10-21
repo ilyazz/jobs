@@ -56,9 +56,9 @@ Starts a new job
 This command returns the job ID if the job was actually started.
 
 Options are:
-- `-cpus` the CPU resource usage limit
-- `-mem` memory limit
-- `-io` io rate limit per block device
+- `-cpus` the CPU resource usage limit. Can be greater than zero and fractional. e.g. `--cpus=3.5`. Defines `cpu.max` cgroup file. Zero means no limit.
+- `-mem` memory limit. Max process memory in bytes. Defines `memory.max` cgroup file. Zero means no limit 
+- `-io` io rate limit per block device. Defines `wpbs` and `rbps` values of `io.max` cgroup file. Zero means no limit.
 
 #### Stop
 Stops the job by ID
