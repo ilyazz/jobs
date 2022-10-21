@@ -122,7 +122,7 @@ The following diagram shows the usage of the library in the server architecture
              |  |    G    |  |   u                                      |                                    
              |  |    R    |  |   p         +------------------------+   |   +--------------------+           
              |  |    P    |  |   e         |                        +---+-->|      Job           |           
-             |  |    C    |->|   r         | Job Jandler            |   |   |      Process       |           
+             |  |    C    |->|   r         | Job Handler            |   |   |      Process       |           
              |  |         |  |   v         +------------------------+   |   +--------------------+           
              |  |         |  |   i                                      |                                    
              |  |         |  |   s                                      |                                    
