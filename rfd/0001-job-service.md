@@ -202,7 +202,7 @@ type Supervisor interface {
 	// InspectJob returns details about the job
 	InspectJob(ctx context.Context, id ID) (Status, error)
 	// JobOutput returns the combined stdout/stderr output of a job, along the job status
-	JobOutput(ctx context.Context, id ID, o *OutputOptions) (Status, io.Reader, error)
+	JobOutput(ctx context.Context, id ID, o *OutputOptions) (Status, io.ReaderCloser, error)
 
 	// Stop stops the supervisor and all its jobs
 	Stop() error
