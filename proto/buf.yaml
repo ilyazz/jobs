@@ -1,0 +1,8 @@
+version: v1
+name: github.com/ilya-zz/jobs
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT
