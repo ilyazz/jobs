@@ -166,7 +166,7 @@ func findCroupMount() (bool, string) {
 }
 
 // SetupProc is intended to be called from shim process, adding the process to required cgroup
-// and configuring /proSetupProcc to make tools like top and ps work
+// and configuring /proc to make tools like top and ps work
 func SetupProc(cgPath string, identity ExecIdentity) error {
 	if err := remountProc(); err != nil {
 		return err

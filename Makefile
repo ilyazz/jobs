@@ -21,6 +21,7 @@ linter:
 libtest: test
 	$(GO) build -o $(OUT)/jtest ./cmd/test/main.go
 
-.PHONY: test
-test:
-	$(GO) test -v ./pkg/...
+.PHONY: clean
+clean:
+	rm -rf $(OUT)
+
