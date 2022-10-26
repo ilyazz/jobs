@@ -5,45 +5,46 @@ package job
 import (
 	"fmt"
 	"github.com/rs/xid"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 )
 
-var appFs = afero.NewOsFs()
-
-// ExecIdentity defines user/group of job process
+// ExecIdentity defines user/group of job process.
 type ExecIdentity struct {
-	// Uid is user id
-	Uid int
-	// Gid is group id
-	Gid int
+	// UID is user id
+	UID int
+	// GID is group id
+	GID int
 }
 
-// ExecLimits defines job resource limits
+// ExecLimits defines job resource limits.
 type ExecLimits struct {
 	CPU            float32
 	MaxRamBytes    int64
 	MaxDiskIOBytes int64
 }
 
-// stateHandler is an internal job state, defining how to handle job API methods
+// stateHandler is an internal job state, defining how to handle job API methods.
 type stateHandler interface {
+	// returns current status enum value
 	status() Status
 
+	// gracefulStop inits graceful process stop
 	gracefulStop(j *Job, to time.Duration) error
+	// forceStop ends the job process immediately, sending SIGKILL
 	forceStop(j *Job) error
+	// process the process end event. send internally, when the job's j.cmd.Wait() call returns
 	exited(j *Job) stateHandler
-
+	// purge logs and working dir of the job
 	cleanup(j *Job) error
-
+	// returns a new concurrent reader object to get the job output
 	logs(j *Job) (io.ReadCloser, error)
 }
 
@@ -60,35 +61,44 @@ var _ stateHandler = stoppingHandler{}
 var _ stateHandler = stoppedHandler{}
 var _ stateHandler = zombieHandler{}
 
+// ID is the type for Job ID.
 type ID string
-
-type Config struct {
-	ShimPath string
-}
 
 const defaultShimPath = "/proc/self/exe"
 
+// Job is the main type for the job control.
 type Job struct {
+	// Job ID
 	ID ID
 
+	// base dir where all jobs data is located. /var/run/job by default
 	baseJobDir string
-	jobDir     string
-
-	workDir  string
+	// a directory for this particular job. contains output, and the working dir
+	jobDir string
+	// path to the working directory
+	workDir string
+	// path to a binary to be used as a shim process
 	shimPath string
 
-	outLock     sync.WaitGroup
+	// wait group to control concurrent access to the output
+	outLock sync.WaitGroup
+	// output file path
 	outFilePath string
 
+	// path to the cgroup controller used by the job
 	cgroup string
 
+	// job command. without args
 	command string
-	args    []string
+	// job arguments
+	args []string
 
+	// Cmd object to represent the job process
 	cmd *exec.Cmd
 
+	//
 	exitCode int
-	done     atomic.Bool
+	done     chan struct{}
 
 	limits ExecLimits
 	ids    ExecIdentity
@@ -96,10 +106,12 @@ type Job struct {
 	stopTimer *time.Timer
 	stateLock sync.Mutex
 	handler   stateHandler
+
+	log zerolog.Logger
 }
 
 // ExitCode returns (proc_exit_code, true) if the job process has ended,
-// or (0, false) otherwise
+// or (0, false) otherwise.
 func (j *Job) ExitCode() (int, bool) {
 
 	cp := j.cmd.ProcessState
@@ -110,30 +122,23 @@ func (j *Job) ExitCode() (int, bool) {
 	return 0, false
 }
 
-var startCommand = func(c *exec.Cmd) error {
-	return c.Start()
-}
-
-var waitCommand = func(c *exec.Cmd) error {
-	return c.Wait()
-}
-
-// New creates a new job to execute command 'cmd' with extra options opts
+// New creates a new job to execute command 'cmd' with extra options opts.
 func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 
 	j := &Job{
+		ID: ID(xid.New().String()),
+
+		done:     make(chan struct{}),
 		shimPath: defaultShimPath,
 		ids: ExecIdentity{
-			Uid: os.Getuid(),
-			Gid: os.Getgid(),
+			UID: os.Getuid(),
+			GID: os.Getgid(),
 		},
 	}
 
 	for _, o := range opts {
 		o(j)
 	}
-
-	j.ID = ID(xid.New().String())
 
 	j.command = cmd
 	j.args = args
@@ -154,7 +159,7 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 				_ = of.Close()
 			}
 			if err := j.rmJobDirs(); err != nil {
-				log.Warn().Err(err).Msg("failed to undo")
+				j.log.Warn().Err(err).Msg("failed to undo")
 			}
 		}
 		if cgPath != "" {
@@ -245,15 +250,15 @@ func (j *Job) initJobDirs() error {
 	wd := filepath.Join(jobDir, "workDir")
 	if err := appFs.MkdirAll(wd, 0700); err != nil {
 		if err2 := appFs.RemoveAll(jobDir); err2 != nil {
-			log.Warn().Err(err2).Msg("failed to undo")
+			j.log.Warn().Err(err2).Msg("failed to undo")
 		}
 		return err
 	}
 
 	// Working dir needs to be accessible by user
-	if err := appFs.Chown(wd, j.ids.Uid, j.ids.Gid); err != nil {
+	if err := appFs.Chown(wd, j.ids.UID, j.ids.GID); err != nil {
 		if err2 := appFs.RemoveAll(jobDir); err2 != nil {
-			log.Warn().Err(err2).Msg("failed to undo")
+			j.log.Warn().Err(err2).Msg("failed to undo")
 		}
 		return err
 	}
@@ -265,13 +270,13 @@ func (j *Job) initJobDirs() error {
 	return nil
 }
 
-// cmdArgs creates a string slice of arguments to be passed to the shim process
+// cmdArgs creates a string slice of arguments to be passed to the shim process.
 func (j *Job) cmdArgs() []string {
 	rt := []string{"--mode=shim",
 		fmt.Sprintf("--cmd=%s", j.command),
 		fmt.Sprintf("--cgroup=%s", j.cgroup),
-		fmt.Sprintf("--uid=%d", j.ids.Uid),
-		fmt.Sprintf("--gid=%d", j.ids.Gid),
+		fmt.Sprintf("--uid=%d", j.ids.UID),
+		fmt.Sprintf("--gid=%d", j.ids.GID),
 	}
 
 	if len(j.args) > 0 {
@@ -282,19 +287,24 @@ func (j *Job) cmdArgs() []string {
 	return rt
 }
 
+// Status returns the job current status, and exit code, if it's ended or stopped. If not, exit code is 0.
 func (j *Job) Status() (Status, int) {
 	j.stateLock.Lock()
 	defer j.stateLock.Unlock()
-
-	return j.handler.status(), j.cmd.ProcessState.ExitCode()
+	st := j.handler.status()
+	if st == StatusActive || st == StatusStopping {
+		return st, 0
+	}
+	return st, j.cmd.ProcessState.ExitCode()
 }
 
+// Status returns the job current status, and exit code, if it's ended or stopped. If not, exit code is 0.
 func (j *Job) setHandler(h stateHandler) {
-	fmt.Printf("Change job state %s -> %s\n", j.handler.status(), h.status())
+	j.log.Debug().Msgf("Change job state %s -> %s", j.handler.status(), h.status())
 	j.handler = h
 }
 
-// InitStop starts "Graceful Stop", sending initial stop signal, and starting timer to send SIGKILL
+// InitStop starts "Graceful Stop", sending initial stop signal, and starting timer to send SIGKILL.
 func (j *Job) InitStop(to time.Duration) error {
 	j.stateLock.Lock()
 	defer j.stateLock.Unlock()
@@ -307,7 +317,7 @@ func (j *Job) InitStop(to time.Duration) error {
 	return err
 }
 
-// Stop ends the job process
+// Stop ends the job process.
 func (j *Job) Stop() error {
 	j.stateLock.Lock()
 	defer j.stateLock.Unlock()
@@ -321,6 +331,7 @@ func (j *Job) Stop() error {
 }
 
 // Cleanup purges the stopped/ended job, remove all the logs and files in working directory
+// Waits for all active log readers to close.
 func (j *Job) Cleanup() error {
 	j.stateLock.Lock()
 	defer j.stateLock.Unlock()
@@ -334,7 +345,7 @@ func (j *Job) Cleanup() error {
 }
 
 // Logs creates a new Reader object to provide job output
-// should be called under state lock
+// should be called under state lock.
 func (j *Job) Logs() (io.ReadCloser, error) {
 	j.stateLock.Lock()
 	defer j.stateLock.Unlock()
@@ -342,12 +353,11 @@ func (j *Job) Logs() (io.ReadCloser, error) {
 	return j.handler.logs(j)
 }
 
-// exited is used internally to update the job state when the job process ended
+// exited is used internally to update the job state when the job process ended.
 func (j *Job) exited() {
 	j.stateLock.Lock()
 	defer j.stateLock.Unlock()
 
-	j.done.Store(true)
 	ps := j.cmd.ProcessState
 	if ps != nil {
 		j.exitCode = ps.ExitCode()
@@ -356,7 +366,7 @@ func (j *Job) exited() {
 	j.setHandler(j.handler.exited(j))
 }
 
-// logsReader is an internal method that does all the Logs() actual work
+// logsReader is an internal method that does all the Logs() actual work.
 func (j *Job) logsReader() (io.ReadCloser, error) {
 	f, err := appFs.OpenFile(j.outFilePath, os.O_RDONLY, 0200)
 	if err != nil {
@@ -376,26 +386,44 @@ func (j *Job) logsReader() (io.ReadCloser, error) {
 // doCleanup waits for all readers to complete and then removes the job directory
 func (j *Job) doCleanup() error {
 	// supposed to be called under j.stateLock
-	// wait for all log readers to close
+	// wait for all Log readers to close
 	j.outLock.Wait()
-	return appFs.Remove(j.jobDir)
+	return appFs.RemoveAll(j.jobDir)
 }
 
-// sendStopSignal sends a signal to the job process to init stop
+// sendStopSignal sends a signal to the job process to init stop.
 func (j *Job) sendStopSignal(graceful bool) error {
 	// supposed to be called under j.stateLock
 	s := syscall.SIGKILL
 	if graceful {
 		s = syscall.SIGTERM
 	}
-	return j.cmd.Process.Signal(s)
+	return signalCommand(j.cmd, s)
 }
 
-// to be able to mock 'exec' syscall in tests
+// startCommand is just a wrapper around exec.Command.Start. for mocks.
+var startCommand = func(c *exec.Cmd) error {
+	return c.Start()
+}
+
+// startCommand is just a wrapper around exec.Command.Wait. for mocks.
+var waitCommand = func(c *exec.Cmd) error {
+	return c.Wait()
+}
+
+// signalCommand is just a wrapper around exec.Command.Signal. for mocks.
+var signalCommand = func(c *exec.Cmd, s os.Signal) error {
+	return c.Process.Signal(s)
+}
+
+// appFs is a wrapper around FS operations. for mocks.
+var appFs = afero.NewOsFs()
+
+// to be able to mock 'exec' syscall in tests.
 var sysExec = syscall.Exec
 
 // Exec replaces the current process with cmd
-// supposed to be called from a shim process
+// supposed to be called from a shim process.
 func Exec(cmd string, args []string) error {
 	pcmd, err := exec.LookPath(cmd)
 	if err != nil {
@@ -403,4 +431,9 @@ func Exec(cmd string, args []string) error {
 	}
 
 	return sysExec(pcmd, args, os.Environ())
+}
+
+// Wait waits until the job state goes to Ended or Stopped.
+func (j *Job) Wait() {
+	<-j.done
 }

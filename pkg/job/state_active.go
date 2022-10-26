@@ -30,5 +30,6 @@ func (a activeHandler) forceStop(j *Job) error {
 }
 
 func (a activeHandler) exited(j *Job) stateHandler {
+	close(j.done)
 	return endedHandler{}
 }

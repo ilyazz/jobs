@@ -26,6 +26,7 @@ func (s stoppedHandler) logs(j *Job) (io.ReadCloser, error) {
 	return j.logsReader()
 }
 
-func (s stoppedHandler) exited(*Job) stateHandler {
+func (s stoppedHandler) exited(j *Job) stateHandler {
+	close(j.done)
 	return stoppedHandler{}
 }

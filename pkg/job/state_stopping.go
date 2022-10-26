@@ -34,6 +34,6 @@ func (s stoppingHandler) exited(j *Job) stateHandler {
 	if j.stopTimer != nil {
 		j.stopTimer.Stop()
 	}
-
+	close(j.done)
 	return stoppedHandler{}
 }

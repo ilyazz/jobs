@@ -17,12 +17,15 @@ import (
 func echo(text, file string) error {
 	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
+		f, err = os.OpenFile(file, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	}
+	if err != nil {
 		return fmt.Errorf("failed to update cgroup file %q: %w", file, err)
 	}
 
 	defer func() { _ = f.Close() }()
 
-	if _, err := f.WriteString(text); err != nil {
+	if _, err := f.WriteString(text + "\n"); err != nil {
 		return fmt.Errorf("failed to update cgroup file %q: %w", file, err)
 	}
 
@@ -33,7 +36,7 @@ func cgroupName(jid ID) string {
 	return "job-" + string(jid)
 }
 
-// SetupCgroup creates a new v2 cgroup for job jid, applying limits
+// SetupCgroup creates a new v2 cgroup for job jid, applying limits.
 func (j *Job) setupCgroup() (string, error) {
 	createdCG := false
 	if j.cgroup == "" {
@@ -51,6 +54,7 @@ func (j *Job) setupCgroup() (string, error) {
 		createdCG = true
 	}
 
+	// limit disk IO
 	if j.limits.MaxDiskIOBytes > 0 {
 		blocks, err := ListBlockDevs()
 		if err != nil {
@@ -73,6 +77,7 @@ func (j *Job) setupCgroup() (string, error) {
 		}
 	}
 
+	// limit RAM
 	if j.limits.MaxRamBytes > 0 {
 		err := echo(itoa(j.limits.MaxRamBytes), filepath.Join(j.cgroup, "memory.max"))
 		if err != nil {
@@ -83,9 +88,10 @@ func (j *Job) setupCgroup() (string, error) {
 		}
 	}
 
+	// limit CPU usage
 	if j.limits.CPU > 0. {
 		period := float32(10000.)
-		txt := fmt.Sprintf("%f.2 %f", period*j.limits.CPU, period)
+		txt := fmt.Sprintf("%.4f %.4f", period*j.limits.CPU, period)
 		err := echo(txt, filepath.Join(j.cgroup, "cpu.max"))
 		if err != nil {
 			if createdCG {
@@ -166,15 +172,15 @@ func SetupProc(cgPath string, identity ExecIdentity) error {
 	return nil
 }
 
-// SetupIDs sets UID and GID of the current process
+// SetupIDs sets UID and GID of the current process.
 func SetupIDs(ids ExecIdentity) error {
 	prevGid := os.Getuid()
-	if err := syscall.Setgid(ids.Gid); err != nil {
+	if err := syscall.Setgid(ids.GID); err != nil {
 		return err
 	}
 
-	if err := syscall.Setuid(ids.Uid); err != nil {
-		syscall.Setgid(prevGid)
+	if err := syscall.Setuid(ids.UID); err != nil {
+		_ = syscall.Setgid(prevGid)
 		return err
 	}
 	return nil
