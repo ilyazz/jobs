@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/rs/zerolog/log"
 )
 
 // echo appends string "text" to file "file".
@@ -27,7 +29,11 @@ func echo(text, file string) error {
 		return fmt.Errorf("failed to update cgroup file %q: %w", file, err)
 	}
 
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Warn().Err(err).Str("file", file).Msg("failed to close the file")
+		}
+	}()
 
 	if _, err := f.WriteString(text + "\n"); err != nil {
 		return fmt.Errorf("failed to update cgroup file %q: %w", file, err)
