@@ -1,9 +1,8 @@
-GO ?= go
+GO ?= CGO_ENABLED=0 go
 OUT ?= build
 
 .PHONY: all
-all:
-	@echo "coming soon..."
+all: client server
 
 .PHONY: test
 test:
@@ -25,3 +24,17 @@ libtest: test
 clean:
 	rm -rf $(OUT)
 
+.PHONY: proto
+proto:
+	buf generate
+
+$(OUT):
+	mkdir $@
+
+.PHONY: client
+client: $(OUT) proto
+	$(GO) build -o $(OUT)/jctrl ./cmd/client/main.go
+
+.PHONY: server
+server: $(OUT) proto
+	$(GO) build -o $(OUT)/jserver ./cmd/server/main.go

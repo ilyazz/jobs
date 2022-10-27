@@ -166,7 +166,7 @@ func findCgroupMount() (bool, string) {
 		if len(parts) < 3 {
 			continue
 		}
-		if parts[0] == "cgroup2" {
+		if parts[2] == "cgroup2" {
 			return true, parts[1]
 		}
 	}

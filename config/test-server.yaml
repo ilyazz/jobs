@@ -1,0 +1,10 @@
+tls:
+  capath: /cert/oldcert/rootCA.pem
+  cert:   /cert/oldcert/localhost.pem
+  key:    /cert/oldcert/localhost-key.pem
+  reloadSec: 60
+ids:
+  uid: 1000
+  gid: 1000
+address: "0.0.0.0:7788"
+

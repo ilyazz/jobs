@@ -34,3 +34,6 @@ func (s Status) String() string {
 		return "UNKNOWN"
 	}
 }
+
+type Details struct {
+}

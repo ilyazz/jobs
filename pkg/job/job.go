@@ -1,12 +1,9 @@
-//go:build linux
+// //go:build linux
 
 package job
 
 import (
 	"fmt"
-	"github.com/rs/xid"
-	"github.com/rs/zerolog"
-	"github.com/spf13/afero"
 	"io"
 	"os"
 	"os/exec"
@@ -15,6 +12,10 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/rs/xid"
+	"github.com/rs/zerolog"
+	"github.com/spf13/afero"
 )
 
 // ExecIdentity defines user/group of job process.
@@ -84,7 +85,7 @@ type Job struct {
 
 	// wait group to control concurrent access to the output
 	outLock    sync.WaitGroup
-	logReaders atomic.Int32
+	logReaders int32
 
 	// output file path
 	outFilePath string
@@ -140,7 +141,6 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 			UID: os.Getuid(),
 			GID: os.Getgid(),
 		},
-
 		log: zerolog.New(io.Discard), // do not log by default
 	}
 
@@ -368,7 +368,7 @@ func (j *Job) Logs() (io.ReadCloser, error) {
 
 	r, err := j.handler.logs(j)
 	if err == nil {
-		n := j.logReaders.Add(1)
+		n := atomic.AddInt32(&j.logReaders, 1)
 		j.log.Info().Int32("total", n).Msg("log reader added")
 	}
 
@@ -410,7 +410,7 @@ func (j *Job) logsReader() (io.ReadCloser, error) {
 func (j *Job) doCleanup() error {
 	// supposed to be called under j.stateLock
 	// wait for all Log readers to close
-	j.log.Debug().Int32("total", j.logReaders.Load()).Msg("cleanup: waiting for log readers...")
+	j.log.Debug().Int32("total", j.logReaders).Msg("cleanup: waiting for log readers...")
 	j.outLock.Wait()
 	j.log.Debug().Msg("cleanup: all log readers closed.")
 
