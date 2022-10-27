@@ -45,7 +45,7 @@ func cgroupName(jid ID) string {
 func (j *Job) setupCgroup() (string, error) {
 	createdCG := false
 	if j.cgroup == "" {
-		ok, cgctrl := findCroupMount()
+		ok, cgctrl := findCgroupMount()
 		if !ok {
 			return "", fmt.Errorf("cgroup2 controller is not mounted")
 		}
@@ -145,8 +145,8 @@ func listBlockDevs() ([]string, error) {
 	return rt, nil
 }
 
-// findCroupMount returns the current mount point of cgroup2 FS if exist
-func findCroupMount() (bool, string) {
+// findCgroupMount returns the current mount point of cgroup2 FS if exist
+func findCgroupMount() (bool, string) {
 	f, err := os.Open("/proc/mounts")
 	if err != nil {
 		return false, ""
