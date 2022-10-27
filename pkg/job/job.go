@@ -4,9 +4,6 @@ package job
 
 import (
 	"fmt"
-	"github.com/rs/xid"
-	"github.com/rs/zerolog"
-	"github.com/spf13/afero"
 	"io"
 	"os"
 	"os/exec"
@@ -15,6 +12,10 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/rs/xid"
+	"github.com/rs/zerolog"
+	"github.com/spf13/afero"
 )
 
 // ExecIdentity defines user/group of job process.
@@ -325,11 +326,13 @@ func (j *Job) InitStop(to time.Duration) error {
 	defer j.stateLock.Unlock()
 
 	err := j.handler.gracefulStop(j, to)
-	if err == nil {
-		j.setHandler(stoppingHandler{})
+	if err != nil {
+		return err
 	}
 
-	return err
+	j.setHandler(stoppingHandler{})
+
+	return nil
 }
 
 // Stop ends the job process.
