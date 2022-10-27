@@ -41,17 +41,17 @@ func FindConfig(file string) (string, *Config, error) {
 			file = filepath.Join(home, defConfig)
 			viper.AddConfigPath(filepath.Join(home, ".jobs"))
 		}
+		file = defConfig
 	}
 
 	var c Config
 
 	if err := viper.ReadInConfig(); err != nil {
-		fmt.Println("config not found", err)
 		err = viper.Unmarshal(&c)
 		if err == nil {
 			return file, &c, nil
 		}
-		return defConfig, nil, fmt.Errorf("failed to load config: %w", err)
+		return file, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	if err := viper.Unmarshal(&c); err != nil {

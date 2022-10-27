@@ -28,8 +28,6 @@ func New(cfg *Config) (pb.JobServiceClient, error) {
 		return nil, fmt.Errorf("server endpoint required")
 	}
 
-	fmt.Printf("Using %q/%q/%q/%q\n", cfg.Server, cfg.CAPath, cfg.CertPath, cfg.KeyPath)
-
 	creds, err := loadTLSCreds(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial: %w", err)

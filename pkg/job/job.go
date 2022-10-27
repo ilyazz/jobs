@@ -67,7 +67,7 @@ var _ stateHandler = zombieHandler{}
 type ID string
 
 const defaultShimPath = "/proc/self/exe"
-const defaultBasePath = "/var/run/jobs/"
+const defaultBasePath = "/tmp/jobs"
 
 // Job is the main type for the job control.
 type Job struct {
@@ -209,6 +209,8 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 		// new PID namespace
 		Cloneflags: syscall.CLONE_NEWPID,
 	}
+
+	j.log.Info().Str("jid", string(j.ID)).Msgf("start proc for: %q %v", j.cmd.Path, j.cmd.Args)
 
 	if err := startCommand(j.cmd); err != nil {
 		return nil, err

@@ -49,7 +49,7 @@ var runCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		_, _ = fmt.Printf("Job started: %s\n", rsp.JobId)
+		_, _ = fmt.Println(rsp.JobId)
 	},
 }
 

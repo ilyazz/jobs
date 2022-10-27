@@ -24,28 +24,36 @@ import (
 var address string
 var config string
 var mode string
+
 var cmd string
-var cpu float64
-var mem int64
-var io int64
+
+var cgroup string
+var uid int
+var gid int
 
 func init() {
 	flag.StringVar(&address, "address", "localhost", "address")
 
 	flag.StringVar(&config, "config", "jobserver.yaml", "")
-	flag.StringVar(&mode, "cmd", "", "")
-	flag.StringVar(&cmd, "mode", "", "")
+	flag.StringVar(&mode, "mode", "", "")
+	flag.StringVar(&cmd, "cmd", "", "")
 
-	flag.Int64Var(&mem, "mem", 0, "")
-	flag.Int64Var(&io, "io", 0, "")
-	flag.Float64Var(&cpu, "cpu", 0.0, "")
+	flag.StringVar(&cgroup, "cgroup", "", "")
+	flag.IntVar(&uid, "uid", 0, "")
+	flag.IntVar(&gid, "gid", 0, "")
 }
 
 func main() {
+
+	if os.Getuid() != 0 {
+		fmt.Fprintf(os.Stderr, "Please run as root\n")
+		os.Exit(1)
+	}
+
 	flag.Parse()
 
 	if mode == "shim" {
-		shim.Main(cmd, os.Args, float32(cpu), mem, io)
+		shim.Main(cmd, flag.Args(), cgroup, uid, gid)
 		return
 	}
 

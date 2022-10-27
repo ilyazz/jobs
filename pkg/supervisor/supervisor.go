@@ -3,9 +3,11 @@ package supervisor
 import (
 	"errors"
 	"io"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/ilyazz/jobs/pkg/job"
@@ -173,7 +175,9 @@ func (s *JobSupervisor) Cleanup(id string) error {
 func createJob(cmd string, args []string, limits job.ExecLimits, ids job.ExecIdentity) (*job.Job, error) {
 	return job.New(cmd, args,
 		job.Cpu(limits.CPU), job.Mem(limits.MaxRamBytes), job.IO(limits.MaxDiskIOBytes),
-		job.UID(ids.UID), job.GID(ids.GID))
+		job.UID(ids.UID), job.GID(ids.GID),
+		job.Log(zerolog.New(os.Stdout).With().Timestamp().Logger()))
+
 }
 
 func (s *JobSupervisor) Active(id string) bool {
