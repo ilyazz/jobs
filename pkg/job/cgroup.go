@@ -130,6 +130,9 @@ func listBlockDevs() ([]string, error) {
 	s := bufio.NewScanner(bytes.NewReader(out))
 	for s.Scan() {
 		parts := strings.Fields(s.Text())
+		if len(parts) < 6 {
+			return nil, fmt.Errorf("unexpected output of lsblk: %q", s.Text())
+		}
 		if parts[5] == "disk" {
 			rt = append(rt, parts[1])
 		}
