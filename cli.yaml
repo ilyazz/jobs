@@ -1,0 +1,4 @@
+server: localhost:9999
+capath: ""
+cert: foo
+key: bar

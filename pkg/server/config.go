@@ -70,6 +70,14 @@ func FindConfig(file string) (*Config, error) {
 		conf.TLS.ReloadSec = 30
 	}
 
+	if f := pflag.Lookup("uid"); f != nil {
+		conf.IDs.UID = f.Value.String()
+	}
+
+	if f := pflag.Lookup("gid"); f != nil {
+		conf.IDs.GID = f.Value.String()
+	}
+
 	u, err := user.Lookup(conf.IDs.UID)
 	if err == nil {
 		conf.IDs.UID = u.Uid

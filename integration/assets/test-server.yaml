@@ -1,0 +1,6 @@
+tls:
+  capath: assets/cert/ca/rootCA.pem
+  cert: assets/cert/localhost.pem
+  key: assets/cert/localhost-key.pem
+
+address: "localhost:7799"

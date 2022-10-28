@@ -233,6 +233,7 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 		defer func() { _ = of.Close() }()
 		_ = waitCommand(j.cmd)
 		j.log.Info().Int("exit_code", j.cmd.ProcessState.ExitCode()).Msg("job ended")
+
 		j.exited()
 	}()
 
@@ -387,6 +388,10 @@ func (j *Job) exited() {
 		j.exitCode = ps.ExitCode()
 	}
 
+	if err := j.removeCgroup(); err != nil {
+		j.log.Warn().Err(err).Msg("failed to delete cgroup")
+	}
+
 	j.setHandler(j.handler.exited(j))
 }
 
@@ -444,11 +449,18 @@ var signalCommand = func(c *exec.Cmd, s os.Signal) error {
 	return c.Process.Signal(s)
 }
 
-// appFs is a wrapper around FS operations. for mocks.
-var appFs = afero.NewOsFs()
-
 // to be able to mock 'exec' syscall in tests.
 var sysExec = syscall.Exec
+
+type sysStub interface {
+	Exec(argv0 string, argv []string, envv []string) error
+	Start(c *exec.Cmd) error
+	Wait(c *exec.Cmd) error
+	Signal(c *exec.Cmd, s os.Signal) error
+}
+
+// appFs is a wrapper around FS operations. for mocks.
+var appFs = afero.NewOsFs()
 
 // Exec replaces the current process with cmd
 // supposed to be called from a shim process.

@@ -1,0 +1,4 @@
+server: localhost:7788
+capath: cert/oldcert/rootCA.pem
+cert: cert/oldcert/other-ilya-client.pem
+key: cert/oldcert/ilya-client-key.pem

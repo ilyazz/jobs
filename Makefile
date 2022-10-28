@@ -38,3 +38,8 @@ client: $(OUT) proto
 .PHONY: server
 server: $(OUT) proto
 	$(GO) build -o $(OUT)/jserver ./cmd/server/main.go
+
+
+.PHONY: integration
+integration: server client
+	go test -v ./integration/integration_test.go --server ../$(OUT)/jserver --client ../$(OUT)/jctrl --uid $(shell id -u) --gid $(shell id -g)

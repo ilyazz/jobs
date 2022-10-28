@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 	"net"
 	"os"
 	"os/signal"
@@ -65,6 +69,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Printf("%+v\n", cfg)
+
 	js, err := server.New(cfg)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "failed to start the server: %v\n", err)
@@ -102,6 +108,8 @@ func main() {
 
 	opts := []grpc.ServerOption{
 		grpc.Creds(credentials.NewTLS(tlsCfg)),
+		grpc.UnaryInterceptor(interceptor),
+		grpc.StreamInterceptor(streamInterceptor),
 	}
 
 	srv := grpc.NewServer(opts...)
@@ -133,5 +141,85 @@ func main() {
 		log.Error().Err(err).Msg("failed to serve")
 		os.Exit(1)
 	}
+}
 
+// clientID extracts a client ID from GRPC context
+func clientID(ctx context.Context) (string, error) {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return "", fmt.Errorf("no client ID")
+	}
+	tlsInfo := p.AuthInfo.(credentials.TLSInfo)
+	if (len(tlsInfo.State.VerifiedChains) < 1) ||
+		(len(tlsInfo.State.VerifiedChains[0]) < 1) {
+		return "", fmt.Errorf("no DN provided")
+	}
+
+	subj := tlsInfo.State.VerifiedChains[0][0].Subject
+	return subj.String(), nil
+}
+
+// wrapper is a simple stream wrapper for stream methods
+type wrapper struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+// Context returns the wrapped context
+func (w wrapper) Context() context.Context {
+	return w.ctx
+}
+
+// streamInterceptor provides timing, panic recovery, and adds client ID to the context
+func streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = status.Error(codes.Internal, "internal error")
+		}
+	}()
+
+	t0 := time.Now()
+
+	cid, err := clientID(stream.Context())
+	if err != nil {
+		return status.Error(codes.Unauthenticated, "no DN provided")
+	}
+
+	wctx := &wrapper{
+		ServerStream: stream,
+		ctx:          server.StoreAuthID(stream.Context(), cid),
+	}
+
+	defer func() {
+		log.Info().Str("client", cid).Msgf("Method %v took %v", info.FullMethod, time.Since(t0))
+	}()
+
+	return handler(srv, wctx)
+}
+
+// interceptor provides timing, panic recovery, and adds client ID to the context
+func interceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	t0 := time.Now()
+
+	cid, err := clientID(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "no DN provided")
+	}
+
+	ctx = server.StoreAuthID(ctx, cid)
+
+	defer func() {
+		log.Info().Str("client", cid).Msgf("Method %v took %v", info.FullMethod, time.Since(t0))
+	}()
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = status.Error(codes.Internal, "internal error")
+			resp = nil
+		}
+	}()
+
+	log.Info().Str("client", cid).Msgf("Calling %v", info.FullMethod)
+
+	return handler(ctx, req)
 }

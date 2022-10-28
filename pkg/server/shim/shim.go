@@ -3,11 +3,14 @@ package shim
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"os/signal"
+	"syscall"
 
 	"github.com/ilyazz/jobs/pkg/job"
 )
 
-func Main(cmd string, args []string, cgroup string, uid int, gid int) {
+func Main(command string, args []string, cgroup string, uid int, gid int) {
 	// sanity check
 	if os.Args[0] != "/proc/self/exe" {
 		_, _ = fmt.Fprint(os.Stderr, "should not be called directly")
@@ -27,11 +30,45 @@ func Main(cmd string, args []string, cgroup string, uid int, gid int) {
 		os.Exit(1)
 	}
 
-	args = append([]string{cmd}, args...)
+	_ = f.Close()
+
+	// must be after setting process uid/gid
+	_, _, errno := syscall.RawSyscall(uintptr(syscall.SYS_PRCTL), uintptr(syscall.PR_SET_PDEATHSIG), uintptr(syscall.SIGHUP), 0)
+	if errno != 0 {
+		_, _ = f.WriteString("failed to setup the process")
+		os.Exit(1)
+	}
+
+	hupChan := make(chan os.Signal, 1)
+	signal.Notify(hupChan, syscall.SIGHUP)
+
+	termChan := make(chan os.Signal, 1)
+	signal.Notify(termChan, syscall.SIGTERM)
+
+	done := make(chan struct{})
 
 	_ = f.Close()
-	if err := job.Exec(cmd, args); err != nil {
-		_, _ = f.WriteString("failed to exec the process: " + err.Error())
-		os.Exit(1)
+
+	cmd := exec.Command(command, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "failed to exec: %v\n", err)
+	}
+
+	go func() {
+		_ = cmd.Wait()
+		close(done)
+	}()
+
+	for {
+		select {
+		case <-done:
+			os.Exit(cmd.ProcessState.ExitCode())
+		case <-hupChan:
+			os.Exit(1)
+		case s := <-termChan:
+			_ = cmd.Process.Signal(s)
+		}
 	}
 }

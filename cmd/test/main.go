@@ -6,6 +6,9 @@ import (
 	"github.com/ilyazz/jobs/pkg/job"
 	"github.com/rs/zerolog"
 	"os"
+	"os/exec"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -31,6 +34,7 @@ func main() {
 			job.Shim("/proc/self/exe"),
 			job.UID(1000),
 			job.GID(1000),
+			job.Mem(31111111),
 			job.Log(zerolog.New(os.Stdout).With().Timestamp().Logger()))
 		if err != nil {
 			panic(err)
@@ -53,6 +57,11 @@ func main() {
 			_ = r2.Close()
 		}()
 
+		//go func() {
+		//	time.Sleep(2 * time.Second)
+		//	j.InitStop(10 * time.Second)
+		//}()
+
 		for {
 			data := make([]byte, 64)
 			n, _ := r.Read(data)
@@ -67,15 +76,11 @@ func main() {
 		}
 
 		_ = r.Close()
-		_ = j.Cleanup()
+		//_ = j.Cleanup()
 
 	} else {
 
-		args := []string{*cmd}
-
-		args = append(args, flag.Args()...)
-
-		fmt.Printf("Running {%v %v} with PID=%v (uid:%v; gid:%v)\n", *cmd, args, os.Getpid(), *uid, *gid)
+		fmt.Printf("Running {%v %v} with PID=%v (uid:%v; gid:%v)\n", *cmd, flag.Args(), os.Getpid(), *uid, *gid)
 
 		f := os.NewFile(3, "out")
 
@@ -90,12 +95,44 @@ func main() {
 			os.Exit(1)
 		}
 
-		//_ = f.Close()
+		// must be after setting process uid/gid
+		_, _, errno := syscall.RawSyscall(uintptr(syscall.SYS_PRCTL), uintptr(syscall.PR_SET_PDEATHSIG), uintptr(syscall.SIGHUP), 0)
+		if errno != 0 {
+			_, _ = f.WriteString("failed to setup the process")
+			os.Exit(1)
+		}
 
-		if err := job.Exec(*cmd, args); err != nil {
-			//	fmt.Println("failed to exec: ", err)
-			_, _ = f.WriteString("failed to exec the process: " + err.Error())
-			os.Exit(-1)
+		hupChan := make(chan os.Signal, 1)
+		signal.Notify(hupChan, syscall.SIGHUP)
+
+		termChan := make(chan os.Signal, 1)
+		signal.Notify(termChan, syscall.SIGTERM)
+
+		done := make(chan struct{})
+
+		_ = f.Close()
+
+		cmd := exec.Command(*cmd, flag.Args()...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Start(); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "failed to exec: %v\n", err)
+		}
+
+		go func() {
+			_ = cmd.Wait()
+			close(done)
+		}()
+
+		for {
+			select {
+			case <-done:
+				os.Exit(cmd.ProcessState.ExitCode())
+			case <-hupChan:
+				os.Exit(1)
+			case s := <-termChan:
+				_ = cmd.Process.Signal(s)
+			}
 		}
 	}
 }

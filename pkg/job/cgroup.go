@@ -47,9 +47,22 @@ func cgroupName(jid ID) string {
 	return "job-" + string(jid)
 }
 
+// removeCgroup completely removes the cgroup associated with the job
+func (j *Job) removeCgroup() error {
+	return os.RemoveAll(j.cgroup)
+}
+
 // SetupCgroup creates a new v2 cgroup for job jid, applying limits.
-func (j *Job) setupCgroup() (string, error) {
+func (j *Job) setupCgroup() (_ string, ferr error) {
 	createdCG := false
+	defer func() {
+		if ferr != nil && createdCG {
+			if err2 := os.Remove(j.cgroup); err2 != nil {
+				log.Warn().Err(err2).Msg("failed to remove cgroup on undo")
+			}
+		}
+	}()
+
 	if j.cgroup == "" {
 		ok, cgctrl := findCgroupMount()
 		if !ok {
@@ -67,11 +80,9 @@ func (j *Job) setupCgroup() (string, error) {
 
 	// limit disk IO
 	if j.limits.MaxDiskIOBytes > 0 {
+
 		blocks, err := listBlockDevs()
 		if err != nil {
-			if createdCG {
-				_ = os.Remove(j.cgroup)
-			}
 			return "", fmt.Errorf("failed to configure IO limits: %w", err)
 		}
 
@@ -80,9 +91,6 @@ func (j *Job) setupCgroup() (string, error) {
 		for _, b := range blocks {
 			txt := fmt.Sprintf("%s rbps=%s wbps=%s", b, rate, rate)
 			if err := echo(txt, filepath.Join(j.cgroup, "io.max")); err != nil {
-				if createdCG {
-					_ = os.Remove(j.cgroup)
-				}
 				return "", fmt.Errorf("failed to configure IO limits: %w", err)
 			}
 		}
@@ -92,9 +100,6 @@ func (j *Job) setupCgroup() (string, error) {
 	if j.limits.MaxRamBytes > 0 {
 		err := echo(itoa(j.limits.MaxRamBytes), filepath.Join(j.cgroup, "memory.max"))
 		if err != nil {
-			if createdCG {
-				_ = os.Remove(j.cgroup)
-			}
 			return "", fmt.Errorf("failed to configure RAM limits: %w", err)
 		}
 	}
@@ -105,9 +110,6 @@ func (j *Job) setupCgroup() (string, error) {
 		txt := fmt.Sprintf("%.4f %.4f", period*j.limits.CPU, period)
 		err := echo(txt, filepath.Join(j.cgroup, "cpu.max"))
 		if err != nil {
-			if createdCG {
-				_ = os.Remove(j.cgroup)
-			}
 			return "", fmt.Errorf("failed to configure CPU limits: %w", err)
 		}
 	}

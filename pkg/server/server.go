@@ -10,8 +10,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/ilyazz/jobs/pkg/acl"
@@ -29,27 +27,30 @@ type JobServer struct {
 	pb.UnimplementedJobServiceServer
 }
 
-// clientID extracts a client ID from GRPC context
-func clientID(ctx context.Context) (string, error) {
-	p, ok := peer.FromContext(ctx)
-	if !ok {
-		return "", fmt.Errorf("no client ID")
-	}
-	tlsInfo := p.AuthInfo.(credentials.TLSInfo)
-	if (len(tlsInfo.State.VerifiedChains) < 1) ||
-		(len(tlsInfo.State.VerifiedChains[0]) < 1) {
-		return "", fmt.Errorf("no DN provided")
-	}
+// authKey is a context key to store auth subject
+var authKey = struct{}{}
 
-	subj := tlsInfo.State.VerifiedChains[0][0].Subject
-	return subj.String(), nil
+// StoreAuthID adds the client ID to the context object
+func StoreAuthID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, authKey, id)
+}
+
+// authID retieves the client ID from context
+func authID(ctx context.Context) (string, bool) {
+	v := ctx.Value(authKey)
+	if v == nil {
+		return "", false
+	}
+	if s, ok := v.(string); ok {
+		return s, true
+	}
+	return "", false
 }
 
 // Start implements API Start method
 func (j *JobServer) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartResponse, error) {
-
-	cid, err := clientID(ctx)
-	if err != nil {
+	cid, ok := authID(ctx)
+	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "invalid client ID")
 	}
 
@@ -93,9 +94,9 @@ func (j *JobServer) hasFullAccess(cid, jid string) bool {
 
 // Stop implements API Stop
 func (j *JobServer) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopResponse, error) {
-	cid, err := clientID(ctx)
-	if err != nil {
-		return nil, err
+	cid, ok := authID(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "invalid client ID")
 	}
 
 	if !j.hasFullAccess(cid, req.JobId) {
@@ -103,7 +104,7 @@ func (j *JobServer) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopResp
 		return nil, status.Error(codes.Internal, "job not found")
 	}
 
-	_, err = j.jobs.Stop(req.JobId, req.Mode == pb.StopMode_STOP_MODE_GRACEFUL)
+	_, err := j.jobs.Stop(req.JobId, req.Mode == pb.StopMode_STOP_MODE_GRACEFUL)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to stop the job")
 	}
@@ -117,9 +118,9 @@ func (j *JobServer) StopServer() {
 
 // Remove implements API Remove method
 func (j *JobServer) Remove(ctx context.Context, req *pb.RemoveRequest) (*pb.RemoveResponse, error) {
-	cid, err := clientID(ctx)
-	if err != nil {
-		return nil, err
+	cid, ok := authID(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "invalid client ID")
 	}
 
 	if !j.hasFullAccess(cid, req.JobId) {
@@ -132,9 +133,9 @@ func (j *JobServer) Remove(ctx context.Context, req *pb.RemoveRequest) (*pb.Remo
 // Inspect implements API Inspect method
 func (j *JobServer) Inspect(ctx context.Context, req *pb.InspectRequest) (*pb.InspectResponse, error) {
 
-	cid, err := clientID(ctx)
-	if err != nil {
-		return nil, err
+	cid, ok := authID(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "invalid client ID")
 	}
 
 	if !j.hasReadAccess(cid, req.JobId) {
@@ -171,9 +172,9 @@ func fromJobStatus(st job.Status) pb.Status {
 
 func (j *JobServer) Logs(req *pb.LogsRequest, server pb.JobService_LogsServer) error {
 
-	cid, err := clientID(server.Context())
-	if err != nil {
-		return err
+	cid, ok := authID(server.Context())
+	if !ok {
+		return status.Error(codes.Unauthenticated, "invalid client ID")
 	}
 
 	if !j.hasReadAccess(cid, req.JobId) {
@@ -218,10 +219,9 @@ func (j *JobServer) Logs(req *pb.LogsRequest, server pb.JobService_LogsServer) e
 	}
 }
 
-func (j *JobServer) mustEmbedUnimplementedJobServiceServer() {
-	panic("implement me")
-}
+func (j *JobServer) mustEmbedUnimplementedJobServiceServer() { panic("implement me") }
 
+// New constructs a new JobServer instance
 func New(cfg *Config) (*JobServer, error) {
 
 	auth := acl.New()
