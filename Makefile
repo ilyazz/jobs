@@ -1,12 +1,26 @@
+GO ?= go
+OUT ?= build
 PROTO_GEN_DIR = ./pkg/api/grpc
-
 CERTS ?= cert
-
 CLIENT ?= $(shell whoami)
-
 SNI ?= $(shell hostname) 127.0.0.1 localhost
-
 CERTNAME ?= server
+
+.PHONY: test
+test:
+	$(GO) test -race -v ./pkg/...
+
+.PHONY: lint
+lint:
+	golangci-lint run
+
+.PNONY: linter
+linter:
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.50.1
+
+.PHONY: libtest
+libtest: test
+	$(GO) build -o $(OUT)/jtest ./cmd/test/main.go
 
 .PHONY: proto
 proto: buf
@@ -18,7 +32,7 @@ buf:
 
 .PHONY: clean
 clean: proto_clean
-	
+	rm -rf $(OUT)	
 
 .PHONY: proto_clean
 proto_clean:
