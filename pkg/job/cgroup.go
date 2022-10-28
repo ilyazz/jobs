@@ -74,16 +74,11 @@ func (j *Job) setupCgroup() (ferr error) {
 		j.cgroupOuter = newCgPath
 		createdCG = true
 
-		j.cgroupInner = filepath.Join(j.cgroupOuter, "inner")
-		err = os.MkdirAll(j.cgroupInner, 0700)
-		if err != nil {
-			return fmt.Errorf("failed to create cgroup: %w", err)
-		}
-	} else {
-		j.cgroupInner = filepath.Join(j.cgroupOuter, "inner")
-		if err := os.MkdirAll(j.cgroupInner, 0700); err != nil {
-			return fmt.Errorf("failed to create cgroup: %w", err)
-		}
+	}
+
+	j.cgroupInner = filepath.Join(j.cgroupOuter, "inner")
+	if err := os.MkdirAll(j.cgroupInner, 0700); err != nil {
+		return fmt.Errorf("failed to create cgroup: %w", err)
 	}
 
 	if err := echo("+io +cpu +memory", filepath.Join(j.cgroupOuter, "cgroup.subtree_control")); err != nil {
