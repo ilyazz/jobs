@@ -127,12 +127,24 @@ func main() {
 		for {
 			select {
 			case <-done:
+				waitForOrphans()
 				os.Exit(cmd.ProcessState.ExitCode())
 			case <-hupChan:
 				os.Exit(1)
 			case s := <-termChan:
 				_ = cmd.Process.Signal(s)
 			}
+		}
+	}
+}
+
+// waitForOrphans blocks until all child processes, including re-parented, exit
+func waitForOrphans() {
+	for {
+		_, err := syscall.Wait4(-1, nil, 0, nil)
+		if err != nil {
+			// TODO: handle other than "no child processes" errors
+			return
 		}
 	}
 }
