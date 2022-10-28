@@ -1,6 +1,10 @@
 package job
 
-import "github.com/rs/zerolog"
+import (
+	"github.com/rs/zerolog"
+	"os"
+	"os/exec"
+)
 
 type Option func(j *Job)
 
@@ -53,10 +57,31 @@ func cgroup(path string) Option {
 	}
 }
 
-// dir is an option to set base jobs dir.
+// dir is an option to set base job dir.
 func dir(path string) Option {
 	return func(j *Job) {
 		j.baseJobDir = path
+	}
+}
+
+// cmdStart is an option to mock start operation
+func cmdStart(start func(c *exec.Cmd) error) Option {
+	return func(j *Job) {
+		j.syscalls.start = start
+	}
+}
+
+// cmdWait is an option to mock wait operation
+func cmdWait(wait func(c *exec.Cmd) error) Option {
+	return func(j *Job) {
+		j.syscalls.wait = wait
+	}
+}
+
+// cmdSignal is an option to mock signal operation
+func cmdSignal(signal func(c *exec.Cmd, s os.Signal) error) Option {
+	return func(j *Job) {
+		j.syscalls.signal = signal
 	}
 }
 

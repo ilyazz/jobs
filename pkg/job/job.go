@@ -37,7 +37,6 @@ type ExecLimits struct {
 type stateHandler interface {
 	// returns current status enum value
 	status() Status
-
 	// gracefulStop inits graceful process stop
 	gracefulStop(j *Job, to time.Duration) error
 	// forceStop ends the job process immediately, sending SIGKILL
@@ -115,7 +114,8 @@ type Job struct {
 	stateLock sync.Mutex
 	handler   stateHandler
 
-	log zerolog.Logger
+	syscalls sysFun
+	log      zerolog.Logger
 }
 
 // ExitCode returns (proc_exit_code, true) if the job process has ended,
@@ -143,8 +143,8 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 			UID: os.Getuid(),
 			GID: os.Getgid(),
 		},
-
-		log: zerolog.New(io.Discard), // do not log by default
+		syscalls: defSysFun,
+		log:      zerolog.New(io.Discard), // do not log by default
 	}
 
 	for _, o := range opts {
@@ -211,7 +211,9 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 		Cloneflags: syscall.CLONE_NEWPID,
 	}
 
-	if err := startCommand(j.cmd); err != nil {
+	j.log.Info().Msgf("Start proc for: %q %v", j.cmd.Path, j.cmd.Args)
+
+	if err := j.syscalls.start(j.cmd); err != nil {
 		return nil, err
 	}
 
@@ -230,7 +232,7 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 
 	go func() {
 		defer func() { _ = of.Close() }()
-		_ = waitCommand(j.cmd)
+		_ = j.syscalls.wait(j.cmd)
 		j.log.Info().Int("exit_code", j.cmd.ProcessState.ExitCode()).Msg("job ended")
 		j.exited()
 	}()
@@ -427,42 +429,42 @@ func (j *Job) sendStopSignal(graceful bool) error {
 	if graceful {
 		s = syscall.SIGTERM
 	}
-	return signalCommand(j.cmd, s)
-}
-
-// startCommand is just a wrapper around exec.Command.Start. for mocks.
-var startCommand = func(c *exec.Cmd) error {
-	return c.Start()
-}
-
-// startCommand is just a wrapper around exec.Command.Wait. for mocks.
-var waitCommand = func(c *exec.Cmd) error {
-	return c.Wait()
-}
-
-// signalCommand is just a wrapper around exec.Command.Signal. for mocks.
-var signalCommand = func(c *exec.Cmd, s os.Signal) error {
-	return c.Process.Signal(s)
-}
-
-// appFs is a wrapper around FS operations. for mocks.
-var appFs = afero.NewOsFs()
-
-// to be able to mock 'exec' syscall in tests.
-var sysExec = syscall.Exec
-
-// Exec replaces the current process with cmd
-// supposed to be called from a shim process.
-func Exec(cmd string, args []string) error {
-	pcmd, err := exec.LookPath(cmd)
-	if err != nil {
-		return fmt.Errorf("%q not found: %w", cmd, err)
-	}
-
-	return sysExec(pcmd, args, os.Environ())
+	return j.syscalls.signal(j.cmd, s)
 }
 
 // Wait waits until the job state goes to Ended or Stopped.
 func (j *Job) Wait() {
 	<-j.done
 }
+
+// startCommand is just a wrapper around exec.Command.Start. for mocks.
+func startCommand(c *exec.Cmd) error {
+	return c.Start()
+}
+
+// startCommand is just a wrapper around exec.Command.Wait. for mocks.
+func waitCommand(c *exec.Cmd) error {
+	return c.Wait()
+}
+
+// signalCommand is just a wrapper around exec.Command.Signal. for mocks.
+func signalCommand(c *exec.Cmd, s os.Signal) error {
+	return c.Process.Signal(s)
+}
+
+// sysFun is  a small syscalls table to be able to mock syscalls in job tests
+type sysFun struct {
+	signal func(c *exec.Cmd, s os.Signal) error
+	start  func(c *exec.Cmd) error
+	wait   func(c *exec.Cmd) error
+}
+
+// defSysFun is the default value for jobs sysFun table
+var defSysFun = sysFun{
+	signal: signalCommand,
+	wait:   waitCommand,
+	start:  startCommand,
+}
+
+// appFs is a wrapper around FS operations. for mocks.
+var appFs = afero.NewOsFs()
