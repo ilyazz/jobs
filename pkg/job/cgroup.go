@@ -12,8 +12,14 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/rs/zerolog/log"
 )
 
+// echo appends string "text" to file "file".
+// It's intended to use with cgroup fs files, which usually exit
+// for testing we're using in-mem pseudo-cgroup FS, for this case we make a second shot
+// and open the file with O_CREATE
 func echo(text, file string) error {
 	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
@@ -23,7 +29,11 @@ func echo(text, file string) error {
 		return fmt.Errorf("failed to update cgroup file %q: %w", file, err)
 	}
 
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Warn().Err(err).Str("file", file).Msg("failed to close the file")
+		}
+	}()
 
 	if _, err := f.WriteString(text + "\n"); err != nil {
 		return fmt.Errorf("failed to update cgroup file %q: %w", file, err)
@@ -32,6 +42,7 @@ func echo(text, file string) error {
 	return nil
 }
 
+// cgroupName creates a cgroup name based on Job ID
 func cgroupName(jid ID) string {
 	return "job-" + string(jid)
 }
@@ -40,7 +51,7 @@ func cgroupName(jid ID) string {
 func (j *Job) setupCgroup() (string, error) {
 	createdCG := false
 	if j.cgroup == "" {
-		ok, cgctrl := FindCroupMount()
+		ok, cgctrl := findCgroupMount()
 		if !ok {
 			return "", fmt.Errorf("cgroup2 controller is not mounted")
 		}
@@ -56,7 +67,7 @@ func (j *Job) setupCgroup() (string, error) {
 
 	// limit disk IO
 	if j.limits.MaxDiskIOBytes > 0 {
-		blocks, err := ListBlockDevs()
+		blocks, err := listBlockDevs()
 		if err != nil {
 			if createdCG {
 				_ = os.Remove(j.cgroup)
@@ -104,14 +115,17 @@ func (j *Job) setupCgroup() (string, error) {
 	return j.cgroup, nil
 }
 
-func AddPidToCgroup(pid int, cgPath string) error {
+// addPidToCgroup add process pid to cgroup controlled by cgPath
+func addPidToCgroup(pid int, cgPath string) error {
 	if err := echo(strconv.Itoa(pid), filepath.Join(cgPath, "cgroup.procs")); err != nil {
 		return fmt.Errorf("failed to add the pid to the new group: %w", err)
 	}
 	return nil
 }
 
-func ListBlockDevs() ([]string, error) {
+// ListBlockDevs enumerates all disk root devices
+// require 'lsblk' to be installed
+func listBlockDevs() ([]string, error) {
 	var rt []string
 
 	cmd := exec.Command("lsblk", "-d")
@@ -122,6 +136,9 @@ func ListBlockDevs() ([]string, error) {
 	s := bufio.NewScanner(bytes.NewReader(out))
 	for s.Scan() {
 		parts := strings.Fields(s.Text())
+		if len(parts) < 6 {
+			return nil, fmt.Errorf("unexpected output of lsblk: %q", s.Text())
+		}
 		if parts[5] == "disk" {
 			rt = append(rt, parts[1])
 		}
@@ -134,7 +151,8 @@ func ListBlockDevs() ([]string, error) {
 	return rt, nil
 }
 
-func FindCroupMount() (bool, string) {
+// findCgroupMount returns the current mount point of cgroup2 FS if exist
+func findCgroupMount() (bool, string) {
 	f, err := os.Open("/proc/mounts")
 	if err != nil {
 		return false, ""
@@ -156,33 +174,49 @@ func FindCroupMount() (bool, string) {
 	return false, ""
 }
 
+// SetupProc is intended to be called from shim process, adding the process to required cgroup
+// and configuring /proc to make tools like top and ps work
 func SetupProc(cgPath string, identity ExecIdentity) error {
-	if err := RemountProc(); err != nil {
+	if err := remountProc(); err != nil {
 		return err
 	}
 
-	if err := AddPidToCgroup(os.Getpid(), cgPath); err != nil {
+	if err := addPidToCgroup(os.Getpid(), cgPath); err != nil {
 		return err
 	}
 
-	if err := SetupIDs(identity); err != nil {
+	if err := setupIDs(identity); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// SetupIDs sets UID and GID of the current process.
-func SetupIDs(ids ExecIdentity) error {
-	prevGid := os.Getuid()
+// setupIDs sets UID and GID of the current process.
+func setupIDs(ids ExecIdentity) error {
+
+	prevGid := os.Getgid()
+
 	if err := syscall.Setgid(ids.GID); err != nil {
+		return err
+	}
+
+	prevGroups, err := syscall.Getgroups()
+	if err != nil {
+		_ = syscall.Setgid(prevGid)
+		return err
+	}
+
+	if err := syscall.Setgroups([]int{ids.GID}); err != nil {
 		return err
 	}
 
 	if err := syscall.Setuid(ids.UID); err != nil {
 		_ = syscall.Setgid(prevGid)
+		_ = syscall.Setgroups(prevGroups)
 		return err
 	}
+
 	return nil
 }
 

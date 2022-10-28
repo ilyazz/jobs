@@ -4,16 +4,18 @@ package job
 
 import (
 	"fmt"
-	"github.com/rs/xid"
-	"github.com/rs/zerolog"
-	"github.com/spf13/afero"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/rs/xid"
+	"github.com/rs/zerolog"
+	"github.com/spf13/afero"
 )
 
 // ExecIdentity defines user/group of job process.
@@ -65,6 +67,7 @@ var _ stateHandler = zombieHandler{}
 type ID string
 
 const defaultShimPath = "/proc/self/exe"
+const defaultBasePath = "/var/run/jobs/"
 
 // Job is the main type for the job control.
 type Job struct {
@@ -81,7 +84,9 @@ type Job struct {
 	shimPath string
 
 	// wait group to control concurrent access to the output
-	outLock sync.WaitGroup
+	outLock    sync.WaitGroup
+	logReaders atomic.Int32
+
 	// output file path
 	outFilePath string
 
@@ -104,6 +109,7 @@ type Job struct {
 	ids    ExecIdentity
 
 	stopTimer *time.Timer
+
 	stateLock sync.Mutex
 	handler   stateHandler
 
@@ -128,12 +134,15 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 	j := &Job{
 		ID: ID(xid.New().String()),
 
-		done:     make(chan struct{}),
-		shimPath: defaultShimPath,
+		done:       make(chan struct{}),
+		shimPath:   defaultShimPath,
+		baseJobDir: defaultBasePath,
 		ids: ExecIdentity{
 			UID: os.Getuid(),
 			GID: os.Getgid(),
 		},
+
+		log: zerolog.New(io.Discard), // do not log by default
 	}
 
 	for _, o := range opts {
@@ -155,6 +164,7 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 	defer func() {
 		// if something is wrong, and we return an error from New(..) - remove the job dir
 		if reterr != nil {
+			j.log.Warn().Err(reterr).Msg("failed to start job")
 			if of != nil {
 				_ = of.Close()
 			}
@@ -188,8 +198,9 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 
 	j.cmd = exec.Command(j.shimPath, j.cmdArgs()...)
 
-	j.cmd.Stdout = io.MultiWriter(of, os.Stdout)
-	j.cmd.Stderr = io.MultiWriter(of, os.Stdout)
+	j.cmd.Stdout = of
+	j.cmd.Stderr = of
+
 	j.cmd.ExtraFiles = append(j.cmd.ExtraFiles, w)
 	j.cmd.Dir = j.workDir
 
@@ -204,7 +215,7 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 		return nil, err
 	}
 
-	// need to close local copy of write-end to receive io.EOF when the child does the same
+	// need to close the local copy of write-end to receive io.EOF when the child does the same
 	// but cannot do it before cmd.Start() returns
 	_ = w.Close()
 
@@ -220,13 +231,12 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 	go func() {
 		defer func() { _ = of.Close() }()
 		_ = waitCommand(j.cmd)
+		j.log.Info().Int("exit_code", j.cmd.ProcessState.ExitCode()).Msg("job ended")
 		j.exited()
 	}()
 
 	return j, nil
 }
-
-const defBasePath = "/var/run/jobs/"
 
 func (j *Job) rmJobDirs() error {
 	return os.RemoveAll(j.jobDir)
@@ -234,9 +244,6 @@ func (j *Job) rmJobDirs() error {
 
 func (j *Job) initJobDirs() error {
 
-	if j.baseJobDir == "" {
-		j.baseJobDir = defBasePath
-	}
 	jobDir := filepath.Join(j.baseJobDir, string(j.ID))
 
 	// purge, if the working dir already exists
@@ -298,9 +305,18 @@ func (j *Job) Status() (Status, int) {
 	return st, j.cmd.ProcessState.ExitCode()
 }
 
+// Completed returns if the job process is still running and additional output can be produced
+func (j *Job) Completed() bool {
+	j.stateLock.Lock()
+	defer j.stateLock.Unlock()
+
+	st := j.handler.status()
+	return st != StatusActive && st != StatusStopping
+}
+
 // Status returns the job current status, and exit code, if it's ended or stopped. If not, exit code is 0.
 func (j *Job) setHandler(h stateHandler) {
-	j.log.Debug().Msgf("Change job state %s -> %s", j.handler.status(), h.status())
+	j.log.Debug().Msgf("change job state %s -> %s", j.handler.status(), h.status())
 	j.handler = h
 }
 
@@ -310,11 +326,13 @@ func (j *Job) InitStop(to time.Duration) error {
 	defer j.stateLock.Unlock()
 
 	err := j.handler.gracefulStop(j, to)
-	if err == nil {
-		j.setHandler(stoppingHandler{})
+	if err != nil {
+		return err
 	}
 
-	return err
+	j.setHandler(stoppingHandler{})
+
+	return nil
 }
 
 // Stop ends the job process.
@@ -340,6 +358,7 @@ func (j *Job) Cleanup() error {
 	if err == nil {
 		j.setHandler(zombieHandler{})
 	}
+	j.log.Info().Msg("job artifacts removed")
 
 	return err
 }
@@ -350,7 +369,13 @@ func (j *Job) Logs() (io.ReadCloser, error) {
 	j.stateLock.Lock()
 	defer j.stateLock.Unlock()
 
-	return j.handler.logs(j)
+	r, err := j.handler.logs(j)
+	if err == nil {
+		n := j.logReaders.Add(1)
+		j.log.Info().Int32("total", n).Msg("log reader added")
+	}
+
+	return r, err
 }
 
 // exited is used internally to update the job state when the job process ended.
@@ -374,8 +399,9 @@ func (j *Job) logsReader() (io.ReadCloser, error) {
 	}
 
 	r := outputReader{
-		f:    f,
-		lock: &j.outLock,
+		f:       f,
+		lock:    &j.outLock,
+		counter: &j.logReaders,
 	}
 
 	j.outLock.Add(1)
@@ -387,7 +413,10 @@ func (j *Job) logsReader() (io.ReadCloser, error) {
 func (j *Job) doCleanup() error {
 	// supposed to be called under j.stateLock
 	// wait for all Log readers to close
+	j.log.Debug().Int32("total", j.logReaders.Load()).Msg("cleanup: waiting for log readers...")
 	j.outLock.Wait()
+	j.log.Debug().Msg("cleanup: all log readers closed.")
+
 	return appFs.RemoveAll(j.jobDir)
 }
 
