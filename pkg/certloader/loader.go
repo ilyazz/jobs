@@ -31,18 +31,16 @@ func (l *Loader) Cert() *tls.Certificate {
 }
 
 // Stop stops the cert watcher.
-func (l *Loader) Stop() error {
+func (l *Loader) Stop() {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
 	if !l.started {
-		return nil
+		return
 	}
 
 	l.ticker.Stop()
 	l.started = false
-
-	return nil
 }
 
 // Start loads the cert and starts the cert file watching ticker.
