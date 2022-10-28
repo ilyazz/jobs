@@ -13,4 +13,5 @@
 .idea
 build
 pkg/api/grpc/jobs/v1
+integration/test.pid
 
