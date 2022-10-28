@@ -3,6 +3,7 @@ package integration
 import (
 	"flag"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
 	"testing"
@@ -51,18 +52,13 @@ func TestMain(m *testing.M) {
 func TestPs(t *testing.T) {
 	c := exec.Command(*client, "--config", "assets/test-client.yaml", "run", "ps", "aux")
 	out, err := c.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out), err)
-		return
-	}
+	assert.NoError(t, err, "failed to run ps")
 
 	id := string(out)
 
 	c = exec.Command(*client, "--config", "assets/test-client.yaml", "logs", id)
 	out, err = c.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out), err)
-	}
+	assert.NoError(t, err, "failed to get logs")
 
 	fmt.Println(string(out))
 }
@@ -70,50 +66,70 @@ func TestPs(t *testing.T) {
 func TestPsBadCA(t *testing.T) {
 	c := exec.Command(*client, "--config", "assets/test-client.yaml", "run", "ps", "aux")
 	out, err := c.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out), err)
-		return
-	}
+	assert.NoError(t, err, "failed to run ps")
 
 	id := string(out)
 
-	c = exec.Command(*client, "--config", "assets/other-test-client.yaml", "logs", id)
+	c = exec.Command(*client, "--config", "assets/test-client.yaml",
+		"--key", "../cert/client/other-john-key.pem",
+		"--cert", "../cert/client/other-john-cert.pem",
+		"logs", id)
 	out, err = c.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out), err)
-	}
-
-	fmt.Println(string(out))
+	assert.Error(t, err, "a user with the same name but different CA must not have access to job log")
 }
 
-func TestPsBadCert(t *testing.T) {
+func TestLogAccess(t *testing.T) {
+
 	c := exec.Command(*client, "--config", "assets/test-client.yaml",
-		//"--key", "../cert/client/qqqqqqq-key.pem",
-		//"--cert", "../cert/client/qqqqqqq-cert.pem",
 		"run", "ps", "aux")
 	out, err := c.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out), err)
-		return
-	}
+	assert.NoError(t, err, "failed to run ps")
 
 	id := string(out)
 
 	c = exec.Command(*client, "--config", "assets/test-client.yaml",
 		"logs", id)
-	out, err = c.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out), err)
-	}
+	_, err = c.CombinedOutput()
+	assert.NoError(t, err, "Author user must have access to logs")
 
 	c = exec.Command(*client, "--config", "assets/test-client.yaml",
-		"--key", "../cert/client/qqqqqqq-key.pem",
-		"--cert", "../cert/client/qqqqqqq-cert.pem",
+		"--key", "assets/cert/client/george-key.pem",
+		"--cert", "assets/cert/client/george-cert.pem",
 		"logs", id)
 	out, err = c.CombinedOutput()
-	if err == nil {
-		t.Fatal(string(out), err)
-	}
+	assert.NoError(t, err, "Super-user user must have access to logs")
 
-	fmt.Println(string(out))
+	c = exec.Command(*client, "--config", "assets/test-client.yaml",
+		"--key", "assets/cert/client/ringo-key.pem",
+		"--cert", "assets/cert/client/ringo-cert.pem",
+		"logs", id)
+	out, err = c.CombinedOutput()
+	assert.NoError(t, err, "Super-read-user user must have access to logs")
+
+	c = exec.Command(*client, "--config", "assets/test-client.yaml",
+		"--key", "assets/cert/client/paul-key.pem",
+		"--cert", "assets/cert/client/paul-cert.pem",
+		"logs", id)
+	out, err = c.CombinedOutput()
+	assert.Error(t, err, "Regular other user must have no access to logs")
+}
+
+// Test jobs logs are not available after 'rm'
+func TestRemove(t *testing.T) {
+	c := exec.Command(*client, "--config", "assets/test-client.yaml",
+		"run", "ps", "aux")
+	out, err := c.CombinedOutput()
+	assert.NoError(t, err, "failed to run ps")
+
+	id := string(out)
+
+	c = exec.Command(*client, "--config", "assets/test-client.yaml",
+		"rm", id)
+	_, err = c.CombinedOutput()
+	assert.NoError(t, err, "Author user must have access to logs")
+
+	c = exec.Command(*client, "--config", "assets/test-client.yaml",
+		"rm", id)
+	_, err = c.CombinedOutput()
+	assert.Error(t, err, "No logs must be available after job removal")
 }

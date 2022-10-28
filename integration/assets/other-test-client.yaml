@@ -1,4 +1,5 @@
 server: localhost:7799
+
 capath: assets/cert/ca/rootCA.pem
 cert: assets/cert/other-ilya-client.pem
 key: assets/cert/other-ilya-client-key.pem

@@ -2,12 +2,14 @@ package acl
 
 import (
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"strings"
 	"sync"
 )
 
 type UserID string
 type ObjectID string
+
 type AccessType int
 
 const (
@@ -15,6 +17,18 @@ const (
 	FullAccess = AccessType(1)
 	ReadAccess = AccessType(2)
 )
+
+// String implements Stringer for AccessType
+func (t AccessType) String() string {
+	switch t {
+	case FullAccess:
+		return "full"
+	case ReadAccess:
+		return "read"
+	default:
+		return "unknown"
+	}
+}
 
 type AccessRequest struct {
 	Subject UserID
@@ -55,6 +69,8 @@ func (c *AccessControl) AddSuperUsers(ids []string, access AccessType) error {
 	default:
 		return fmt.Errorf("unknown access type: %v", access)
 	}
+
+	log.Info().Msgf("added %s superusers: %v", access, ids)
 
 	return nil
 }

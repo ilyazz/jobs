@@ -67,7 +67,6 @@ client-cert: mkcert certdir
 
 .PHONY: server-cert
 server-cert: mkcert certdir
-
 	CAROOT=$(CAROOT) mkcert -cert-file $(CERTS)/server/$(CERTNAME)-cert.pem -key-file $(CERTS)/server/$(CERTNAME)-key.pem -ecdsa $(SNI)
 
 .PHONY: certdir
