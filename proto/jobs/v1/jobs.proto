@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package jobs.v1;
+
+option go_package = "github.com/ilyazz/jobs/pkg/api/grpc/jobs/v1";
+
+import "google/protobuf/empty.proto";
+
+// job status
+enum Status {
+  // Job is unknown
+  STATUS_UNSPECIFIED = 0;
+  // Job is running
+  STATUS_ACTIVE = 1;
+  // Graceful stop activated, but not done yet
+  STATUS_STOPPING = 2;
+  // Job is stopped via API
+  STATUS_STOPPED = 3;
+  // Job has completed
+  STATUS_ENDED = 4;
+}
+
+// StopMode describes how jobs are stopped
+enum StopMode {
+  // Unknown
+  STOP_MODE_UNSPECIFIED = 0;
+  // Kill the job
+  STOP_MODE_IMMEDIATE = 1;
+  // Notify the job about stop, wait for some time, and then kill it
+  STOP_MODE_GRACEFUL = 2;
+}
+
+// options related to 'Logs' API
+message LogsOptions {
+  // if true, server will keep the output stream open if the all output has been sent,
+  // waiting for more data to arrive
+  bool follow = 1;
+}
+
+// job process limits
+message Limits {
+  // max memory amount in bytes. 0 means no limit
+  int64  memory = 1;
+  // max cpus. may be a fraction, e.g. cpus=3.14. 0.0 means no limit
+  float  cpus = 2;
+  // max IO write and read rates in bytes. 0 means no limit
+  int64  io = 3;
+}
+
+// request to start a new job
+message StartRequest {
+  // job command
+  string command = 1;
+  // job command arguments
+  repeated string args = 2;
+  // limits of the job process
+  Limits limits = 3;
+}
+
+// job start response
+message StartResponse {
+  // unique job id
+  string job_id = 1;
+}
+
+// job stop request
+message StopRequest {
+  // id of the job to stop
+  string job_id = 1;
+  // stop strategy
+  StopMode mode = 2;
+}
+
+// job stop response
+message StopResponse {
+  // job state after the stop command
+  Details details = 1;
+}
+
+// request to get job details
+message InspectRequest {
+  // job id to inspect
+  string job_id = 1;
+}
+
+// response to inspect
+message InspectResponse {
+  // job state
+  Details details = 1;
+}
+
+// request to cleanup a stopped job
+message RemoveRequest {
+  // job id to remove
+  string job_id = 1;
+}
+
+// response to cleanup a stopped job
+message RemoveResponse {
+  google.protobuf.Empty none = 1;
+}
+
+// request to get job output
+message LogsRequest {
+  // job id to get output from
+  string job_id = 1;
+  // how to get output
+  LogsOptions options = 2;
+}
+
+// Logs API returns a GRPC stream of LogsResponseItem
+message LogsResponse {
+  // raw bytes, a chunk of output
+  bytes data = 1;
+}
+
+// job details
+message Details {
+  // current job state
+  Status status = 1;
+  // process exit code if the status is JOB_STOPPED or JOB_ENDED, 0 otherwise
+  int32  exit_code = 2;
+}
+
+// JobService provides methods to control jobs on server
+service JobService {
+  // Start a new job
+  rpc Start(StartRequest) returns(StartResponse);
+  // Stop active job. Another option is to force-stop a stopping job
+  rpc Stop(StopRequest) returns(StopResponse);
+  // Remove inactive job. Cleanup server artifacts
+  rpc Remove(RemoveRequest) returns(RemoveResponse);
+  // Get job details
+  rpc Inspect(InspectRequest) returns(InspectResponse);
+  // Get a stream of job output
+  rpc Logs(LogsRequest) returns(stream LogsResponse);
+}
