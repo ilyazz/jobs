@@ -1,17 +1,10 @@
-GO ?= CGO_ENABLED=0 go
+GO ?= go
 OUT ?= build
-
 PROTO_GEN_DIR = ./pkg/api/grpc
 CERTS ?= cert
-
 CLIENT ?= $(shell whoami)
-
 SNI ?= $(shell hostname) 127.0.0.1 localhost
-
 CERTNAME ?= server
-
-.PHONY: all
-all: clean client server integration
 
 .PHONY: test
 test:
@@ -28,6 +21,10 @@ linter:
 .PHONY: libtest
 libtest: test
 	$(GO) build -o $(OUT)/jtest ./cmd/test/main.go
+
+.PHONY: clean
+clean:
+	rm -rf $(OUT)
 
 .PHONY: proto
 proto:
@@ -55,7 +52,7 @@ buf:
 .PHONY: clean
 clean: proto_clean
 	rm -rf $(OUT)
-	
+
 
 .PHONY: proto_clean
 proto_clean:

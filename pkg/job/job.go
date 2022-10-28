@@ -90,8 +90,10 @@ type Job struct {
 	// output file path
 	outFilePath string
 
-	// path to the cgroup controller used by the job
-	cgroup string
+	// path to the outer cgroup controller used by the job
+	cgroupOuter string
+	// path to the inner cgroup controller used by the job
+	cgroupInner string
 
 	// job command. without args
 	command string
@@ -181,12 +183,10 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 		return nil, err
 	}
 
-	cgPath, err = j.setupCgroup()
+	err = j.setupCgroup()
 	if err != nil {
 		return nil, err
 	}
-
-	j.cgroup = cgPath
 
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -283,7 +283,7 @@ func (j *Job) initJobDirs() error {
 func (j *Job) cmdArgs() []string {
 	rt := []string{"--mode=shim",
 		fmt.Sprintf("--cmd=%s", j.command),
-		fmt.Sprintf("--cgroup=%s", j.cgroup),
+		fmt.Sprintf("--cgroup=%s", j.cgroupInner),
 		fmt.Sprintf("--uid=%d", j.ids.UID),
 		fmt.Sprintf("--gid=%d", j.ids.GID),
 	}
@@ -328,11 +328,13 @@ func (j *Job) InitStop(to time.Duration) error {
 	defer j.stateLock.Unlock()
 
 	err := j.handler.gracefulStop(j, to)
-	if err == nil {
-		j.setHandler(stoppingHandler{})
+	if err != nil {
+		return err
 	}
 
-	return err
+	j.setHandler(stoppingHandler{})
+
+	return nil
 }
 
 // Stop ends the job process.

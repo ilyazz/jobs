@@ -23,8 +23,9 @@ import (
 func echo(text, file string) error {
 	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
-		f, err = os.OpenFile(file, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		f, err = os.OpenFile(file, os.O_CREATE|os.O_WRONLY, 0600)
 	}
+
 	if err != nil {
 		return fmt.Errorf("failed to update cgroup file %q: %w", file, err)
 	}
@@ -49,58 +50,68 @@ func cgroupName(jid ID) string {
 
 // removeCgroup completely removes the cgroup associated with the job
 func (j *Job) removeCgroup() error {
-	return os.RemoveAll(j.cgroup)
+	return os.RemoveAll(j.cgroupOuter)
 }
 
 // SetupCgroup creates a new v2 cgroup for job jid, applying limits.
-func (j *Job) setupCgroup() (_ string, ferr error) {
+func (j *Job) setupCgroup() (ferr error) {
 	createdCG := false
+
 	defer func() {
 		if ferr != nil && createdCG {
-			if err2 := os.Remove(j.cgroup); err2 != nil {
-				log.Warn().Err(err2).Msg("failed to remove cgroup on undo")
+			if err := os.Remove(j.cgroupOuter); err != nil {
+				j.log.Warn().Err(err).Msg("failed to remove cgroup on error")
 			}
 		}
 	}()
 
-	if j.cgroup == "" {
+	if j.cgroupOuter == "" {
 		ok, cgctrl := findCgroupMount()
 		if !ok {
-			return "", fmt.Errorf("cgroup2 controller is not mounted")
+			return fmt.Errorf("cgroup2 controller is not mounted")
 		}
 
 		newCgPath := filepath.Join(cgctrl, cgroupName(j.ID))
 		err := os.MkdirAll(newCgPath, 0600)
 		if err != nil {
-			return "", fmt.Errorf("failed to create cgroup: %w", err)
+			return fmt.Errorf("failed to create cgroup: %w", err)
 		}
-		j.cgroup = newCgPath
+		j.cgroupOuter = newCgPath
 		createdCG = true
+
+	}
+
+	j.cgroupInner = filepath.Join(j.cgroupOuter, "inner")
+	if err := os.MkdirAll(j.cgroupInner, 0700); err != nil {
+		return fmt.Errorf("failed to create cgroup: %w", err)
+	}
+
+	if err := echo("+io +cpu +memory", filepath.Join(j.cgroupOuter, "cgroup.subtree_control")); err != nil {
+		return fmt.Errorf("failed to setup cgroup: %w", err)
 	}
 
 	// limit disk IO
 	if j.limits.MaxDiskIOBytes > 0 {
-
 		blocks, err := listBlockDevs()
 		if err != nil {
-			return "", fmt.Errorf("failed to configure IO limits: %w", err)
+			return fmt.Errorf("failed to configure IO limits: %w", err)
 		}
 
 		rate := itoa(j.limits.MaxDiskIOBytes)
 
 		for _, b := range blocks {
 			txt := fmt.Sprintf("%s rbps=%s wbps=%s", b, rate, rate)
-			if err := echo(txt, filepath.Join(j.cgroup, "io.max")); err != nil {
-				return "", fmt.Errorf("failed to configure IO limits: %w", err)
+			if err := echo(txt, filepath.Join(j.cgroupInner, "io.max")); err != nil {
+				return fmt.Errorf("failed to configure IO limits: %w", err)
 			}
 		}
 	}
 
 	// limit RAM
 	if j.limits.MaxRamBytes > 0 {
-		err := echo(itoa(j.limits.MaxRamBytes), filepath.Join(j.cgroup, "memory.max"))
+		err := echo(itoa(j.limits.MaxRamBytes), filepath.Join(j.cgroupInner, "memory.max"))
 		if err != nil {
-			return "", fmt.Errorf("failed to configure RAM limits: %w", err)
+			return fmt.Errorf("failed to configure RAM limits: %w", err)
 		}
 	}
 
@@ -108,13 +119,13 @@ func (j *Job) setupCgroup() (_ string, ferr error) {
 	if j.limits.CPU > 0. {
 		period := float32(10000.)
 		txt := fmt.Sprintf("%.4f %.4f", period*j.limits.CPU, period)
-		err := echo(txt, filepath.Join(j.cgroup, "cpu.max"))
+		err := echo(txt, filepath.Join(j.cgroupInner, "cpu.max"))
 		if err != nil {
-			return "", fmt.Errorf("failed to configure CPU limits: %w", err)
+			return fmt.Errorf("failed to configure CPU limits: %w", err)
 		}
 	}
 
-	return j.cgroup, nil
+	return nil
 }
 
 // addPidToCgroup add process pid to cgroup controlled by cgPath
@@ -196,15 +207,19 @@ func SetupProc(cgPath string, identity ExecIdentity) error {
 
 // setupIDs sets UID and GID of the current process.
 func setupIDs(ids ExecIdentity) error {
-	prevGid := os.Getuid()
+
 	if err := syscall.Setgid(ids.GID); err != nil {
 		return err
 	}
 
-	if err := syscall.Setuid(ids.UID); err != nil {
-		_ = syscall.Setgid(prevGid)
+	if err := syscall.Setgroups(nil); err != nil {
 		return err
 	}
+
+	if err := syscall.Setuid(ids.UID); err != nil {
+		return err
+	}
+
 	return nil
 }
 

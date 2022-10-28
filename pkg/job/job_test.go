@@ -24,7 +24,9 @@ func TestHappyPathShimExec(t *testing.T) {
 
 	uid, gid := os.Getuid(), os.Getgid()
 
-	cgDir := t.TempDir()
+	cgOutDir := t.TempDir()
+	cgDir := filepath.Join(cgOutDir, "inner")
+
 	jDir := t.TempDir()
 
 	var cmdJDir string
@@ -36,7 +38,7 @@ func TestHappyPathShimExec(t *testing.T) {
 		return nil
 	}
 
-	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"), dir(jDir), cgroup(cgDir), UID(uid), GID(gid), Log(lg))
+	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"), dir(jDir), cgroup(cgOutDir), UID(uid), GID(gid), Log(lg))
 
 	assert.NoError(t, err)
 	assert.NotNil(t, j)
@@ -87,7 +89,9 @@ func TestHappyPathNoUidGid(t *testing.T) {
 
 	uid, gid := os.Getuid(), os.Getgid()
 
-	cgDir := t.TempDir()
+	cgOutDir := t.TempDir()
+	cgDir := filepath.Join(cgOutDir, "inner")
+
 	jDir := t.TempDir()
 
 	var cmdJDir string
@@ -99,7 +103,7 @@ func TestHappyPathNoUidGid(t *testing.T) {
 		return nil
 	}
 
-	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"), dir(jDir), cgroup(cgDir))
+	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"), dir(jDir), cgroup(cgOutDir))
 
 	assert.NoError(t, err)
 	assert.NotNil(t, j)
@@ -134,17 +138,17 @@ func TestCgroupConfig(t *testing.T) {
 	assert.NotNil(t, j)
 
 	// verify cgroup cpu
-	cpuCg, err := os.ReadFile(filepath.Join(cgDir, "cpu.max"))
+	cpuCg, err := os.ReadFile(filepath.Join(cgDir, "inner", "cpu.max"))
 	assert.NoError(t, err)
 	assert.Equal(t, "31400.0020 10000.0000\n", string(cpuCg))
 
 	// verify cgroup memory
-	memCg, err := os.ReadFile(filepath.Join(cgDir, "memory.max"))
+	memCg, err := os.ReadFile(filepath.Join(cgDir, "inner", "memory.max"))
 	assert.NoError(t, err)
 	assert.Equal(t, "27\n", string(memCg))
 
 	// verify cgroup IO
-	ioCg, err := os.ReadFile(filepath.Join(cgDir, "io.max"))
+	ioCg, err := os.ReadFile(filepath.Join(cgDir, "inner", "io.max"))
 	assert.NoError(t, err)
 
 	s := bufio.NewScanner(bytes.NewReader(ioCg))

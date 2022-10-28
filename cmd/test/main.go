@@ -3,13 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/ilyazz/jobs/pkg/job"
-	"github.com/rs/zerolog"
 	"os"
 	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/ilyazz/jobs/pkg/job"
+	"github.com/rs/zerolog"
 )
 
 var mode = flag.String("mode", "", "binary mode")
