@@ -13,4 +13,5 @@
 .idea
 
 pkg/api/grpc/jobs/v1
+build
 
