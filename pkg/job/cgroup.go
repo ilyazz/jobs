@@ -195,25 +195,15 @@ func SetupProc(cgPath string, identity ExecIdentity) error {
 // setupIDs sets UID and GID of the current process.
 func setupIDs(ids ExecIdentity) error {
 
-	prevGid := os.Getgid()
-
 	if err := syscall.Setgid(ids.GID); err != nil {
 		return err
 	}
 
-	prevGroups, err := syscall.Getgroups()
-	if err != nil {
-		_ = syscall.Setgid(prevGid)
-		return err
-	}
-
-	if err := syscall.Setgroups([]int{ids.GID}); err != nil {
+	if err := syscall.Setgroups(nil); err != nil {
 		return err
 	}
 
 	if err := syscall.Setuid(ids.UID); err != nil {
-		_ = syscall.Setgid(prevGid)
-		_ = syscall.Setgroups(prevGroups)
 		return err
 	}
 
