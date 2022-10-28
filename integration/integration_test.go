@@ -88,6 +88,8 @@ func TestPsBadCA(t *testing.T) {
 
 func TestPsBadCert(t *testing.T) {
 	c := exec.Command(*client, "--config", "assets/test-client.yaml",
+		//"--key", "../cert/client/qqqqqqq-key.pem",
+		//"--cert", "../cert/client/qqqqqqq-cert.pem",
 		"run", "ps", "aux")
 	out, err := c.CombinedOutput()
 	if err != nil {
@@ -98,15 +100,15 @@ func TestPsBadCert(t *testing.T) {
 	id := string(out)
 
 	c = exec.Command(*client, "--config", "assets/test-client.yaml",
-		"--key", "assets/cert/foo-key.pem",
-		"--cert", "assets/cert/foo-cert.pem",
 		"logs", id)
 	out, err = c.CombinedOutput()
-	if err == nil {
+	if err != nil {
 		t.Fatal(string(out), err)
 	}
 
 	c = exec.Command(*client, "--config", "assets/test-client.yaml",
+		"--key", "../cert/client/qqqqqqq-key.pem",
+		"--cert", "../cert/client/qqqqqqq-cert.pem",
 		"logs", id)
 	out, err = c.CombinedOutput()
 	if err == nil {

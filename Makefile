@@ -4,7 +4,9 @@ PROTO_GEN_DIR = ./pkg/api/grpc
 CERTS ?= cert
 CLIENT ?= $(shell whoami)
 SNI ?= $(shell hostname) 127.0.0.1 localhost
+
 CERTNAME ?= server
+CAROOT ?= certs/ca
 
 .PHONY: test
 test:
@@ -60,11 +62,13 @@ mkcert:
 
 .PHONY: client-cert
 client-cert: mkcert certdir
-	CAROOT=$(CERTS)/CA mkcert -cert-file $(CERTS)/client/$(CLIENT)-cert.pem -key-file $(CERTS)/client/$(CLIENT)-key.pem -ecdsa -client $(CLIENT) 
+	echo "use CAROOT=$(CAROOT)"
+	CAROOT=$(CAROOT) mkcert -cert-file $(CERTS)/client/$(CLIENT)-cert.pem -key-file $(CERTS)/client/$(CLIENT)-key.pem -ecdsa -client $(CLIENT)
 
 .PHONY: server-cert
 server-cert: mkcert certdir
-	CAROOT=$(CERTS)/CA mkcert -cert-file $(CERTS)/server/$(CERTNAME)-cert.pem -key-file $(CERTS)/server/$(CERTNAME)-key.pem -ecdsa $(SNI)
+
+	CAROOT=$(CAROOT) mkcert -cert-file $(CERTS)/server/$(CERTNAME)-cert.pem -key-file $(CERTS)/server/$(CERTNAME)-key.pem -ecdsa $(SNI)
 
 .PHONY: certdir
 certdir:

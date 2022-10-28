@@ -162,12 +162,12 @@ func clientID(ctx context.Context) (string, error) {
 	}
 	tlsInfo := p.AuthInfo.(credentials.TLSInfo)
 	if (len(tlsInfo.State.VerifiedChains) < 1) ||
-		(len(tlsInfo.State.VerifiedChains[0]) < 1) {
-		return "", fmt.Errorf("no DN provided")
+		(len(tlsInfo.State.VerifiedChains[0]) < 1) ||
+		(len(tlsInfo.State.VerifiedChains[0][0].DNSNames) < 1) {
+		return "", fmt.Errorf("no ID provided")
 	}
 
-	subj := tlsInfo.State.VerifiedChains[0][0].Subject
-	return subj.String(), nil
+	return tlsInfo.State.VerifiedChains[0][0].DNSNames[0], nil
 }
 
 // wrapper is a simple stream wrapper for stream methods
