@@ -8,7 +8,7 @@ CERTNAME ?= server
 
 .PHONY: test
 test:
-	$(GO) test -v ./pkg/...
+	$(GO) test -race -v ./pkg/...
 
 .PHONY: lint
 lint:
@@ -21,10 +21,6 @@ linter:
 .PHONY: libtest
 libtest: test
 	$(GO) build -o $(OUT)/jtest ./cmd/test/main.go
-
-.PHONY: clean
-clean:
-	rm -rf $(OUT)
 
 .PHONY: proto
 proto:

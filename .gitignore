@@ -11,7 +11,7 @@
 # vendor/
 #
 .idea
-
+build
 pkg/api/grpc/jobs/v1
 build
 integration/test.pid
