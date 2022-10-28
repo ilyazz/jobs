@@ -192,8 +192,14 @@ func (j *JobServer) Logs(req *pb.LogsRequest, server pb.JobService_LogsServer) e
 	}()
 
 	data := make([]byte, 1024)
-	// read data until available
+
 	for {
+		select {
+		case <-server.Context().Done():
+			return status.Error(codes.Canceled, "context cancelled")
+		default:
+		}
+
 		n, err := r.Read(data)
 		if n == 0 {
 			if !req.Options.Follow {
