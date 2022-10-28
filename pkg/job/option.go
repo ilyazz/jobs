@@ -49,7 +49,7 @@ func GID(id int) Option {
 // cgroup is an option to override cgroup controller path.
 func cgroup(path string) Option {
 	return func(j *Job) {
-		j.cgroup = path
+		j.cgroupOuter = path
 	}
 }
 
