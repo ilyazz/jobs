@@ -31,14 +31,15 @@ func TestHappyPathShimExec(t *testing.T) {
 
 	var cmdJDir string
 
-	startCommand = func(c *exec.Cmd) error {
-		cmd = c.Path
-		args = c.Args
-		cmdJDir = c.Dir
-		return nil
-	}
-
-	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"), dir(jDir), cgroup(cgOutDir), UID(uid), GID(gid), Log(lg))
+	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"),
+		dir(jDir), cgroup(cgOutDir),
+		cmdStart(func(c *exec.Cmd) error {
+			cmd = c.Path
+			args = c.Args
+			cmdJDir = c.Dir
+			return nil
+		}),
+		UID(uid), GID(gid), Log(lg))
 
 	assert.NoError(t, err)
 	assert.NotNil(t, j)
@@ -59,20 +60,17 @@ func TestHappyPathStatus(t *testing.T) {
 	cgDir := t.TempDir()
 	jDir := t.TempDir()
 
-	startCommand = func(c *exec.Cmd) error {
-		return nil
-	}
-
 	var waitWG sync.WaitGroup
 	waitWG.Add(1)
 	defer waitWG.Done()
 
-	waitCommand = func(c *exec.Cmd) error {
-		waitWG.Wait()
-		return nil
-	}
-
-	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"), dir(jDir), cgroup(cgDir))
+	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"),
+		cmdStart(defStart),
+		cmdWait(func(c *exec.Cmd) error {
+			waitWG.Wait()
+			return nil
+		}),
+		dir(jDir), cgroup(cgDir))
 
 	assert.NoError(t, err)
 	assert.NotNil(t, j)
@@ -96,14 +94,15 @@ func TestHappyPathNoUidGid(t *testing.T) {
 
 	var cmdJDir string
 
-	startCommand = func(c *exec.Cmd) error {
-		cmd = c.Path
-		args = c.Args
-		cmdJDir = c.Dir
-		return nil
-	}
-
-	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"), dir(jDir), cgroup(cgOutDir))
+	j, err := New("ls", []string{"/tmp", "/var"},
+		Shim("/bin/shim"),
+		cmdStart(func(c *exec.Cmd) error {
+			cmd = c.Path
+			args = c.Args
+			cmdJDir = c.Dir
+			return nil
+		}),
+		dir(jDir), cgroup(cgOutDir))
 
 	assert.NoError(t, err)
 	assert.NotNil(t, j)
@@ -119,20 +118,22 @@ func TestHappyPathNoUidGid(t *testing.T) {
 
 }
 
+func defStart(c *exec.Cmd) error {
+	return nil
+}
+
+func defWait(c *exec.Cmd) error {
+	return nil
+}
+
 func TestCgroupConfig(t *testing.T) {
 	cgDir := t.TempDir()
 	jDir := t.TempDir()
 
-	startCommand = func(c *exec.Cmd) error {
-		return nil
-	}
-
-	waitCommand = func(c *exec.Cmd) error {
-		return nil
-	}
-
-	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"),
-		dir(jDir), cgroup(cgDir), Log(lg), Cpu(3.14), Mem(27), IO(34))
+	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/true"),
+		dir(jDir), cgroup(cgDir),
+		cmdStart(defStart), cmdWait(defWait),
+		Log(lg), Cpu(3.14), Mem(27), IO(34))
 
 	assert.NoError(t, err)
 	assert.NotNil(t, j)
@@ -162,24 +163,23 @@ func TestStop(t *testing.T) {
 	cgDir := t.TempDir()
 	jDir := t.TempDir()
 
-	startCommand = func(c *exec.Cmd) error {
-		return nil
-	}
-
 	var jend sync.WaitGroup
 	jend.Add(1)
-	waitCommand = func(c *exec.Cmd) error {
-		jend.Wait()
-		return nil
-	}
 
 	var s os.Signal
-	signalCommand = func(c *exec.Cmd, ts os.Signal) error {
-		s = ts
-		return nil
-	}
+	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"),
+		dir(jDir), cgroup(cgDir),
+		cmdStart(defStart),
+		cmdWait(func(c *exec.Cmd) error {
+			jend.Wait()
+			return nil
+		}),
+		cmdSignal(func(c *exec.Cmd, ts os.Signal) error {
+			s = ts
+			return nil
+		}),
+		Log(lg))
 
-	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"), dir(jDir), cgroup(cgDir), Log(lg))
 	assert.NoError(t, err)
 	assert.NotNil(t, j)
 
@@ -199,24 +199,23 @@ func TestGracefulStop(t *testing.T) {
 	cgDir := t.TempDir()
 	jDir := t.TempDir()
 
-	startCommand = func(c *exec.Cmd) error {
-		return nil
-	}
-
 	var jend sync.WaitGroup
 	jend.Add(1)
-	waitCommand = func(c *exec.Cmd) error {
-		jend.Wait()
-		return nil
-	}
 
 	var s os.Signal
-	signalCommand = func(c *exec.Cmd, ts os.Signal) error {
-		s = ts
-		return nil
-	}
 
-	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"), dir(jDir), cgroup(cgDir), Log(lg))
+	j, err := New("ls", []string{"/tmp", "/var"},
+		Shim("/bin/true"),
+		cmdStart(defStart),
+		cmdWait(func(c *exec.Cmd) error {
+			jend.Wait()
+			return nil
+		}),
+		cmdSignal(func(c *exec.Cmd, ts os.Signal) error {
+			s = ts
+			return nil
+		}),
+		dir(jDir), cgroup(cgDir), Log(lg))
 	assert.NoError(t, err)
 	assert.NotNil(t, j)
 
@@ -238,22 +237,19 @@ func TestLogs(t *testing.T) {
 	cgDir := t.TempDir()
 	jDir := t.TempDir()
 
-	startCommand = func(c *exec.Cmd) error {
-		return nil
-	}
-
 	var jend sync.WaitGroup
 	jend.Add(1)
-	waitCommand = func(c *exec.Cmd) error {
-		jend.Wait()
-		return nil
-	}
-
-	signalCommand = func(c *exec.Cmd, ts os.Signal) error {
-		return nil
-	}
-
-	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/shim"), Log(lg), dir(jDir), cgroup(cgDir))
+	j, err := New("ls", []string{"/tmp", "/var"},
+		Shim("/bin/shim"),
+		cmdStart(defStart),
+		cmdWait(func(c *exec.Cmd) error {
+			jend.Wait()
+			return nil
+		}),
+		cmdSignal(func(c *exec.Cmd, ts os.Signal) error {
+			return nil
+		}),
+		Log(lg), dir(jDir), cgroup(cgDir))
 	assert.NoError(t, err)
 	assert.NotNil(t, j)
 
