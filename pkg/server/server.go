@@ -196,7 +196,7 @@ func (j *JobServer) Logs(req *pb.LogsRequest, server pb.JobService_LogsServer) e
 	for {
 		select {
 		case <-server.Context().Done():
-			return nil
+			return status.Error(codes.Canceled, "context cancelled")
 		default:
 		}
 
