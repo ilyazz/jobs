@@ -196,6 +196,7 @@ func SetupProc(cgPath string, identity ExecIdentity) error {
 func setupIDs(ids ExecIdentity) error {
 
 	prevGid := os.Getgid()
+
 	if err := syscall.Setgid(ids.GID); err != nil {
 		return err
 	}
@@ -206,12 +207,7 @@ func setupIDs(ids ExecIdentity) error {
 		return err
 	}
 
-	if err := syscall.Setgroups([]int{ids.UID}); err != nil {
-		return err
-	}
-
-	if err := syscall.Setgid(ids.GID); err != nil {
-		_ = syscall.Setgroups(prevGroups)
+	if err := syscall.Setgroups([]int{ids.GID}); err != nil {
 		return err
 	}
 
