@@ -36,6 +36,8 @@ var cgroup string
 var uid int
 var gid int
 
+var pidfile string
+
 func init() {
 	flag.StringVar(&address, "address", "localhost", "address")
 
@@ -46,6 +48,8 @@ func init() {
 	flag.StringVar(&cgroup, "cgroup", "", "")
 	flag.IntVar(&uid, "uid", 0, "")
 	flag.IntVar(&gid, "gid", 0, "")
+
+	flag.StringVar(&pidfile, "pid", "", "")
 }
 
 func main() {
@@ -60,6 +64,10 @@ func main() {
 	if mode == "shim" {
 		shim.Main(cmd, flag.Args(), cgroup, uid, gid)
 		return
+	}
+
+	if pidfile != "" {
+		_ = os.WriteFile(pidfile, []byte(fmt.Sprintf("%d", os.Getpid())), 0666)
 	}
 
 	log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
@@ -196,6 +204,8 @@ func streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.Str
 	defer func() {
 		log.Info().Str("client", cid).Msgf("Method %v took %v", info.FullMethod, time.Since(t0))
 	}()
+
+	log.Info().Str("client", cid).Msgf("Calling %v", info.FullMethod)
 
 	return handler(srv, wctx)
 }
