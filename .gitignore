@@ -9,3 +9,8 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+#
+.idea
+
+pkg/api/grpc/jobs/v1
+
