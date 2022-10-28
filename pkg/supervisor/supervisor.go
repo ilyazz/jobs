@@ -176,8 +176,7 @@ func createJob(cmd string, args []string, limits job.ExecLimits, ids job.ExecIde
 	return job.New(cmd, args,
 		job.Cpu(limits.CPU), job.Mem(limits.MaxRamBytes), job.IO(limits.MaxDiskIOBytes),
 		job.UID(ids.UID), job.GID(ids.GID),
-		job.Log(zerolog.New(os.Stdout).With().Timestamp().Logger()))
-
+		job.Log(zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})))
 }
 
 func (s *JobSupervisor) Active(id string) bool {

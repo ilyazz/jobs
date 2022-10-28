@@ -210,7 +210,7 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 		Cloneflags: syscall.CLONE_NEWPID,
 	}
 
-	j.log.Info().Str("jid", string(j.ID)).Msgf("start proc for: %q %v", j.cmd.Path, j.cmd.Args)
+	j.log.Info().Msgf("Start proc for: %q %v", j.cmd.Path, j.cmd.Args)
 
 	if err := startCommand(j.cmd); err != nil {
 		return nil, err
