@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +12,9 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 )
 
 var lg = zerolog.New(os.Stdout).With().Logger()
@@ -133,7 +134,7 @@ func TestCgroupConfig(t *testing.T) {
 	j, err := New("ls", []string{"/tmp", "/var"}, Shim("/bin/true"),
 		dir(jDir), cgroup(cgDir),
 		cmdStart(defStart), cmdWait(defWait),
-		Log(lg), Cpu(3.14), Mem(27), IO(34))
+		Log(lg), CPU(3.14), Mem(27), IO(34))
 
 	assert.NoError(t, err)
 	assert.NotNil(t, j)

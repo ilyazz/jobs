@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"os"
 
+	pb "github.com/ilyazz/jobs/pkg/api/grpc/jobs/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-
-	pb "github.com/ilyazz/jobs/pkg/api/grpc/jobs/v1"
 )
 
 // New creates a new secure Job Server connection, using cert/ca data from the config

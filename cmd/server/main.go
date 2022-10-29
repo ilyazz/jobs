@@ -6,24 +6,23 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"github.com/rs/zerolog"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
 	"net"
 	"os"
 	"os/signal"
 	"time"
 
-	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/reflection"
-
 	pb "github.com/ilyazz/jobs/pkg/api/grpc/jobs/v1"
 	"github.com/ilyazz/jobs/pkg/certloader"
 	"github.com/ilyazz/jobs/pkg/server"
 	"github.com/ilyazz/jobs/pkg/server/shim"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 var address string

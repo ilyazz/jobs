@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
-
 	"github.com/ilyazz/jobs/pkg/client"
+	"github.com/spf13/cobra"
 )
 
 // configCmd represents the config command
@@ -23,7 +22,7 @@ var configCmd = &cobra.Command{
 		}
 
 		if err := client.SaveConfig(file, cfg); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "failed to save config file: %w", err)
+			_, _ = fmt.Fprintf(os.Stderr, "failed to save config file: %v", err)
 			os.Exit(1)
 		}
 	},

@@ -8,15 +8,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ilyazz/jobs/pkg/acl"
+	pb "github.com/ilyazz/jobs/pkg/api/grpc/jobs/v1"
+	"github.com/ilyazz/jobs/pkg/job"
+	"github.com/ilyazz/jobs/pkg/supervisor"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"github.com/ilyazz/jobs/pkg/acl"
-	"github.com/ilyazz/jobs/pkg/job"
-	"github.com/ilyazz/jobs/pkg/supervisor"
-
-	pb "github.com/ilyazz/jobs/pkg/api/grpc/jobs/v1"
 )
 
 // JobServer implements protobuf Jobs API
@@ -73,7 +71,7 @@ func toJobLimits(limits *pb.Limits) job.ExecLimits {
 	return job.ExecLimits{
 		CPU:            limits.Cpus,
 		MaxDiskIOBytes: limits.Io,
-		MaxRamBytes:    limits.Memory,
+		MaxRAMBytes:    limits.Memory,
 	}
 }
 
@@ -237,7 +235,7 @@ func (j *JobServer) Logs(req *pb.LogsRequest, server pb.JobService_LogsServer) e
 	for {
 		select {
 		case <-server.Context().Done():
-			return status.Error(codes.Canceled, "context cancelled")
+			return status.Error(codes.Canceled, "context canceled")
 		default:
 		}
 
@@ -265,8 +263,6 @@ func (j *JobServer) Logs(req *pb.LogsRequest, server pb.JobService_LogsServer) e
 		}
 	}
 }
-
-func (j *JobServer) mustEmbedUnimplementedJobServiceServer() { panic("implement me") }
 
 // New constructs a new JobServer instance
 func New(cfg *Config) (*JobServer, error) {

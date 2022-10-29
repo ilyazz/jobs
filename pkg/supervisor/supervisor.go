@@ -9,10 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ilyazz/jobs/pkg/job"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-
-	"github.com/ilyazz/jobs/pkg/job"
 )
 
 // ErrNotFound means the job is no longer registered
@@ -196,7 +195,7 @@ func (s *JobSupervisor) Cleanup(id string) error {
 // createJob is an internal wrapper for job.New(..)
 func createJob(cmd string, args []string, limits job.ExecLimits, ids job.ExecIdentity) (*job.Job, error) {
 	return job.New(cmd, args,
-		job.Cpu(limits.CPU), job.Mem(limits.MaxRamBytes), job.IO(limits.MaxDiskIOBytes),
+		job.CPU(limits.CPU), job.Mem(limits.MaxRAMBytes), job.IO(limits.MaxDiskIOBytes),
 		job.UID(ids.UID), job.GID(ids.GID),
 		job.Log(zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})))
 }

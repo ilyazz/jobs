@@ -8,10 +8,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
-
 	pb "github.com/ilyazz/jobs/pkg/api/grpc/jobs/v1"
 	"github.com/ilyazz/jobs/pkg/client"
+	"github.com/spf13/cobra"
 )
 
 // inspectCmd represents the inspect command

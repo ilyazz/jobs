@@ -35,13 +35,13 @@ func FindConfig(file string) (string, *Config, error) {
 		viper.SetConfigName(defConfig)
 		viper.SetConfigType("yaml")
 
+		file = defConfig
+
 		home, err := os.UserHomeDir()
 		if err == nil {
 			viper.AddConfigPath(home)
-			file = filepath.Join(home, defConfig)
 			viper.AddConfigPath(filepath.Join(home, ".jobs"))
 		}
-		file = defConfig
 	}
 
 	var c Config

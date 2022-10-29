@@ -108,8 +108,8 @@ func (j *Job) setupCgroup() (ferr error) {
 	}
 
 	// limit RAM
-	if j.limits.MaxRamBytes > 0 {
-		err := echo(itoa(j.limits.MaxRamBytes), filepath.Join(j.cgroupInner, "memory.max"))
+	if j.limits.MaxRAMBytes > 0 {
+		err := echo(itoa(j.limits.MaxRAMBytes), filepath.Join(j.cgroupInner, "memory.max"))
 		if err != nil {
 			return fmt.Errorf("failed to configure RAM limits: %w", err)
 		}

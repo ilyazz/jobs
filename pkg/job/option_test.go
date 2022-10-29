@@ -1,9 +1,10 @@
 package job
 
 import (
+	"testing"
+
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestUidOption(t *testing.T) {

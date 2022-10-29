@@ -2,9 +2,10 @@ package acl
 
 import (
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"strings"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 type UserID string

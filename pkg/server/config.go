@@ -18,7 +18,7 @@ type Config struct {
 		FullAccess []string `mapstructure:"full"`
 		ReadAccess []string `mapstructure:"read"`
 	} `mapstructure:"superusers"`
-	// TLS is a set of TLS paramaters
+	// TLS is a set of TLS parameters
 	TLS struct {
 		// CAPath is a path to CA cert to verify clients
 		CAPath string `mapstructure:"capath"`

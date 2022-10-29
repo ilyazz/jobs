@@ -1,9 +1,10 @@
 package job
 
 import (
-	"github.com/rs/zerolog"
 	"os"
 	"os/exec"
+
+	"github.com/rs/zerolog"
 )
 
 type Option func(j *Job)
@@ -16,7 +17,7 @@ func Shim(path string) Option {
 }
 
 // Cpu is an option to limit job CPU usage. Fractional, may be >1.
-func Cpu(cpu float32) Option {
+func CPU(cpu float32) Option {
 	return func(j *Job) {
 		j.limits.CPU = cpu
 	}
@@ -25,7 +26,7 @@ func Cpu(cpu float32) Option {
 // Mem is an option to limit job RAM usage.
 func Mem(bytes int64) Option {
 	return func(j *Job) {
-		j.limits.MaxRamBytes = bytes
+		j.limits.MaxRAMBytes = bytes
 	}
 }
 

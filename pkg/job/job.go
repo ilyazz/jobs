@@ -29,7 +29,7 @@ type ExecIdentity struct {
 // ExecLimits defines job resource limits.
 type ExecLimits struct {
 	CPU            float32
-	MaxRamBytes    int64
+	MaxRAMBytes    int64
 	MaxDiskIOBytes int64
 }
 
