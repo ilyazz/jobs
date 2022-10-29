@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -26,6 +27,7 @@ func TestMain(m *testing.M) {
 		fmt.Sprintf("--gid=%d", *gid))
 
 	c.Stdout = os.Stdout
+	c.Stdin = os.Stdin
 	c.Stderr = os.Stderr
 
 	err := c.Start()
@@ -36,8 +38,6 @@ func TestMain(m *testing.M) {
 	// let server start
 	time.Sleep(time.Second)
 	m.Run()
-
-	fmt.Println("all done")
 
 	data, err := os.ReadFile("test.pid")
 	if err != nil {
@@ -54,13 +54,11 @@ func TestPs(t *testing.T) {
 	out, err := c.CombinedOutput()
 	assert.NoError(t, err, "failed to run ps")
 
-	id := string(out)
+	id := outToJID(out)
 
 	c = exec.Command(*client, "--config", "assets/test-client.yaml", "logs", id)
 	out, err = c.CombinedOutput()
 	assert.NoError(t, err, "failed to get logs")
-
-	fmt.Println(string(out))
 }
 
 func TestPsBadCA(t *testing.T) {
@@ -68,7 +66,7 @@ func TestPsBadCA(t *testing.T) {
 	out, err := c.CombinedOutput()
 	assert.NoError(t, err, "failed to run ps")
 
-	id := string(out)
+	id := outToJID(out)
 
 	c = exec.Command(*client, "--config", "assets/test-client.yaml",
 		"--key", "../cert/client/other-john-key.pem",
@@ -85,7 +83,7 @@ func TestLogAccess(t *testing.T) {
 	out, err := c.CombinedOutput()
 	assert.NoError(t, err, "failed to run ps")
 
-	id := string(out)
+	id := outToJID(out)
 
 	c = exec.Command(*client, "--config", "assets/test-client.yaml",
 		"logs", id)
@@ -121,15 +119,25 @@ func TestRemove(t *testing.T) {
 	out, err := c.CombinedOutput()
 	assert.NoError(t, err, "failed to run ps")
 
-	id := string(out)
+	id := outToJID(out)
+	strings.TrimRight(id, "\n")
+
+	// avoid race here. job may be ended by this point, as well as still running
+	_, _ = exec.Command(*client, "--config", "assets/test-client.yaml",
+		"stop", "--force", id).CombinedOutput()
 
 	c = exec.Command(*client, "--config", "assets/test-client.yaml",
 		"rm", id)
 	_, err = c.CombinedOutput()
-	assert.NoError(t, err, "Author user must have access to logs")
+	assert.NoError(t, err, "Author user must be able to remove job")
 
 	c = exec.Command(*client, "--config", "assets/test-client.yaml",
 		"rm", id)
 	_, err = c.CombinedOutput()
 	assert.Error(t, err, "No logs must be available after job removal")
+}
+
+// outToJID trims newlines and whitespaces
+func outToJID(id []byte) string {
+	return strings.Trim(string(id), "\n \t")
 }
