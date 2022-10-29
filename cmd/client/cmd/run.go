@@ -59,9 +59,9 @@ var ioLimit int64
 
 func init() {
 
-	runCmd.PersistentFlags().Float32Var(&cpuLimit, "cpu", 1.0, "CPU limit for the job. No limit if zero or not set.")
-	runCmd.PersistentFlags().Int64Var(&memLimit, "mem", 0, "RAM limit for the job. No limit if zero or not set.")
-	runCmd.PersistentFlags().Int64Var(&ioLimit, "io", 0, "IO rate limit for the job. No limit if zero or not set.")
+	runCmd.PersistentFlags().Float32VarP(&cpuLimit, "cpu", "c", 1.0, "CPU limit for the job. No limit if zero or not set.")
+	runCmd.PersistentFlags().Int64VarP(&memLimit, "mem", "m", 0, "RAM limit for the job. No limit if zero or not set.")
+	runCmd.PersistentFlags().Int64VarP(&ioLimit, "io", "i", 0, "IO rate limit for the job. No limit if zero or not set.")
 
 	rootCmd.AddCommand(runCmd)
 }

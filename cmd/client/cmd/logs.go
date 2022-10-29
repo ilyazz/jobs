@@ -16,7 +16,7 @@ import (
 var logsCmd = &cobra.Command{
 	Use:   "logs",
 	Short: "Get job output",
-	Long:  `TODO`,
+	Long:  `Get job output`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, cfg, err := client.FindConfig(config)
 		if err != nil {
@@ -64,17 +64,6 @@ var logsCmd = &cobra.Command{
 var follow bool
 
 func init() {
-	logsCmd.PersistentFlags().BoolVar(&follow, "f", false, "follow mode")
-
+	logsCmd.PersistentFlags().BoolVarP(&follow, "follow", "f", false, "follow mode")
 	rootCmd.AddCommand(logsCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// logsCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// logsCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

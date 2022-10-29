@@ -15,7 +15,7 @@ import (
 var stopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the remote job",
-	Long:  `Stop the remote job. TODO: add more`,
+	Long:  `Stop the remote job`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, cfg, err := client.FindConfig(config)
 		if err != nil {
@@ -53,6 +53,6 @@ var stopCmd = &cobra.Command{
 var force bool
 
 func init() {
-	stopCmd.PersistentFlags().BoolVar(&force, "force", false, "Force stop the job")
+	stopCmd.PersistentFlags().BoolVarP(&force, "force", "f", false, "Force stop the job")
 	rootCmd.AddCommand(stopCmd)
 }
