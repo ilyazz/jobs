@@ -53,7 +53,7 @@ var logsCmd = &cobra.Command{
 				if err == io.EOF {
 					return
 				}
-				fmt.Printf("failed to read logs: %s", diagMessage(err))
+				fmt.Printf("failed to read logs: %s\n", diagMessage(err))
 				os.Exit(1)
 			}
 			fmt.Print(string(out.Data))

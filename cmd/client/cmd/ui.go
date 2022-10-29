@@ -13,6 +13,8 @@ func diagMessage(err error) string {
 		switch gerr.Code() {
 		case codes.Internal:
 			return "internal error"
+		case codes.NotFound:
+			return "no such job"
 		case codes.Unauthenticated:
 			return "invalid certificate"
 		}

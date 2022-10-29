@@ -35,7 +35,7 @@ func StoreAuthID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, authKey, id)
 }
 
-// authID retieves the client ID from context
+// authID retrieves the client ID from context
 func authID(ctx context.Context) (string, bool) {
 	v := ctx.Value(authKey)
 	if v == nil {
@@ -55,8 +55,11 @@ func (j *JobServer) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 	}
 
 	jid, err := j.jobs.Start(req.Command, req.Args, toJobLimits(req.Limits))
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to start job")
+	switch {
+	case errors.Is(err, supervisor.ErrNotFound):
+		return nil, status.Error(codes.NotFound, "job not found")
+	case err != nil:
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	_ = j.auth.SetOwner(acl.ObjectID(jid), acl.UserID(cid))
@@ -101,13 +104,18 @@ func (j *JobServer) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopResp
 
 	if !j.hasFullAccess(cid, req.JobId) {
 		log.Info().Str("client", cid).Str("job", req.JobId).Msg("no access")
-		return nil, status.Error(codes.Internal, "job not found")
+		return nil, status.Error(codes.NotFound, "job not found")
 	}
 
 	_, err := j.jobs.Stop(req.JobId, req.Mode == pb.StopMode_STOP_MODE_GRACEFUL)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to stop the job")
+
+	switch {
+	case errors.Is(err, supervisor.ErrNotFound):
+		return nil, status.Error(codes.NotFound, "job not found")
+	case err != nil:
+		return nil, status.Error(codes.Internal, err.Error())
 	}
+
 	return &pb.StopResponse{}, nil
 }
 
@@ -125,9 +133,22 @@ func (j *JobServer) Remove(ctx context.Context, req *pb.RemoveRequest) (*pb.Remo
 
 	if !j.hasFullAccess(cid, req.JobId) {
 		log.Info().Str("client", cid).Str("job", req.JobId).Msg("no access")
-		return nil, status.Error(codes.Internal, "job not found")
+		return nil, status.Error(codes.NotFound, "job not found")
 	}
-	return &pb.RemoveResponse{}, j.jobs.Remove(req.JobId)
+	err := j.jobs.Remove(req.JobId)
+
+	switch {
+	case errors.Is(err, supervisor.ErrNotFound):
+		return nil, status.Error(codes.NotFound, "job not found")
+	case err != nil:
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	if err := j.auth.Remove(acl.ObjectID(req.JobId)); err != nil {
+		log.Warn().Err(err).Str("id", req.JobId).Msg("failed to update ACL")
+	}
+
+	return &pb.RemoveResponse{}, nil
 }
 
 // Inspect implements GRPC Inspect method
@@ -143,11 +164,15 @@ func (j *JobServer) Inspect(ctx context.Context, req *pb.InspectRequest) (*pb.In
 
 	if !j.hasReadAccess(cid, req.JobId) {
 		log.Info().Str("client", cid).Str("job", req.JobId).Msg("no access")
-		return nil, status.Error(codes.Internal, "job not found")
+		return nil, status.Error(codes.NotFound, "job not found")
 	}
 	st, code, cmd, err := j.jobs.Inspect(req.JobId)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to get job details")
+
+	switch {
+	case errors.Is(err, supervisor.ErrNotFound):
+		return nil, status.Error(codes.NotFound, "job not found")
+	case err != nil:
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &pb.InspectResponse{
@@ -188,10 +213,17 @@ func (j *JobServer) Logs(req *pb.LogsRequest, server pb.JobService_LogsServer) e
 
 	if !j.hasReadAccess(cid, req.JobId) {
 		log.Info().Str("client", cid).Str("job", req.JobId).Msg("no access")
-		return status.Error(codes.Internal, "job not found")
+		return status.Error(codes.NotFound, "job not found")
 	}
 
 	r, err := j.jobs.Logs(req.JobId)
+	switch {
+	case errors.Is(err, supervisor.ErrNotFound):
+		return status.Error(codes.NotFound, "job not found")
+	case err != nil:
+		return status.Error(codes.Internal, err.Error())
+	}
+
 	if err != nil {
 		return status.Error(codes.Internal, "failed to get job output")
 	}
