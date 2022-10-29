@@ -3,7 +3,6 @@ package certloader
 import (
 	"crypto/tls"
 	"fmt"
-
 	"sync"
 	"time"
 
@@ -12,12 +11,16 @@ import (
 
 // Loader is a cert loader. It
 type Loader struct {
-	lock     sync.RWMutex
+	// CertPath is where to load cert from
 	CertPath string
-	KeyPath  string
-	Reload   time.Duration
+	// KeyPath is where to load key from
+	KeyPath string
+	// Reload is cert reload interval
+	Reload time.Duration
 
-	cert    *tls.Certificate
+	lock sync.RWMutex
+	cert *tls.Certificate
+
 	started bool
 	ticker  *time.Ticker
 }
@@ -64,6 +67,8 @@ func (l *Loader) Start() error {
 	l.cert = cert
 
 	l.ticker = time.NewTicker(l.Reload)
+	log.Info().Err(err).Msgf("reload cert from (%v/%v) every %v", l.CertPath, l.KeyPath, l.Reload)
+
 	go func() {
 		for range l.ticker.C {
 			if err := l.reload(); err != nil {
