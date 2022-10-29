@@ -199,16 +199,3 @@ func createJob(cmd string, args []string, limits job.ExecLimits, ids job.ExecIde
 		job.UID(ids.UID), job.GID(ids.GID),
 		job.Log(zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})))
 }
-
-// Active returns true, if the job process is still running
-func (s *JobSupervisor) Active(id string) bool {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	j, ok := s.jobs[job.ID(id)]
-	if !ok {
-		return false
-	}
-
-	return !j.Completed()
-}

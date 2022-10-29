@@ -247,12 +247,11 @@ func (j *JobServer) Logs(req *pb.LogsRequest, server pb.JobService_LogsServer) e
 			if !errors.Is(err, io.EOF) {
 				return status.Error(codes.Internal, "failed to get job output")
 			}
-			if j.jobs.Active(req.JobId) {
-				time.Sleep(200 * time.Millisecond)
-				continue
+			if errors.Is(err, job.ErrEOFJobDone) {
+				// job ended. no more output. return
+				return nil
 			}
-			// job ended. no more output. return
-			return nil
+			time.Sleep(200 * time.Millisecond)
 		}
 
 		err = server.Send(&pb.LogsResponse{

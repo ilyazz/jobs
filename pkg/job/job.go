@@ -241,10 +241,12 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 	return j, nil
 }
 
+// rmJobDirs removes job directory structure
 func (j *Job) rmJobDirs() error {
 	return os.RemoveAll(j.jobDir)
 }
 
+// initJobDirs creates directory structure for a jobs
 func (j *Job) initJobDirs() error {
 
 	jobDir := filepath.Join(j.baseJobDir, string(j.ID))
@@ -361,6 +363,7 @@ func (j *Job) Cleanup() error {
 	if err == nil {
 		j.setHandler(zombieHandler{})
 	}
+
 	j.log.Info().Msg("job artifacts removed")
 
 	return err
@@ -409,6 +412,7 @@ func (j *Job) logsReader() (io.ReadCloser, error) {
 		f:       f,
 		lock:    &j.outLock,
 		counter: &j.logReaders,
+		done:    j.done,
 	}
 
 	j.outLock.Add(1)
