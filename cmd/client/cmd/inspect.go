@@ -45,8 +45,14 @@ var inspectCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("Job:\t%s\nStatus:\t:%s\nExitCode:\t:%v\n",
+		fmt.Printf(
+			`Job:		%s
+Command:	%s
+Status:		%s
+ExitCode:	%v
+`,
 			args[0],
+			rsp.Details.Command,
 			rsp.Details.Status,
 			rsp.Details.ExitCode)
 	},

@@ -120,6 +120,8 @@ message Details {
   Status status = 1;
   // process exit code if the status is JOB_STOPPED or JOB_ENDED, 0 otherwise
   int32  exit_code = 2;
+  // full job command + args
+  string command = 3;
 }
 
 // JobService provides methods to control jobs on server

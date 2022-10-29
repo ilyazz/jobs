@@ -2,8 +2,10 @@ package supervisor
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,15 +18,19 @@ import (
 // ErrNotFound means the job is no longer registered
 var ErrNotFound = errors.New("job not found")
 
+// JobSupervisor manages the jobs
 type JobSupervisor struct {
 	lock sync.RWMutex
 	jobs map[job.ID]*job.Job
-	ids  job.ExecIdentity
+
+	// ids - uid/gid used by supervisor to run job processes
+	ids job.ExecIdentity
 }
 
+// Remove all job artifacts, and the unlinks the job id from supervisor
 func (s *JobSupervisor) Remove(id string) error {
 	s.lock.Lock()
-
+	// intentionally no defer unlock. see comment below
 	jid := job.ID(id)
 
 	j, ok := s.jobs[jid]
@@ -32,7 +38,13 @@ func (s *JobSupervisor) Remove(id string) error {
 		s.lock.Unlock()
 		return ErrNotFound
 	}
+	if !j.Completed() {
+		s.lock.Unlock()
+		return fmt.Errorf("job is still running")
+	}
+
 	delete(s.jobs, jid)
+	// j.Cleanup() can take a while, don't block other operations and release the lock here
 	s.lock.Unlock()
 
 	err := j.Cleanup()
@@ -45,6 +57,7 @@ func (s *JobSupervisor) Remove(id string) error {
 	return nil
 }
 
+// New creates s new job supervisor. All jobs will be run with uid/gid credentials
 func New(uid, gid int) *JobSupervisor {
 	return &JobSupervisor{
 		jobs: make(map[job.ID]*job.Job),
@@ -55,6 +68,7 @@ func New(uid, gid int) *JobSupervisor {
 	}
 }
 
+// Start a new job with given parameters
 func (s *JobSupervisor) Start(cmd string, args []string, limits job.ExecLimits) (job.ID, error) {
 	j, err := createJob(cmd, args, limits, s.ids)
 	if err != nil {
@@ -114,19 +128,23 @@ func (s *JobSupervisor) Stop(id string, graceful bool) (any, error) {
 	return nil, err
 }
 
-func (s *JobSupervisor) Inspect(id string) (job.Status, int32, error) {
+// Inspect returns job details: status, exit code and command
+// TODO get rid of 4 ret values, add a structure
+func (s *JobSupervisor) Inspect(id string) (job.Status, int32, string, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
 	j, ok := s.jobs[job.ID(id)]
 	if !ok {
-		return 0, 0, ErrNotFound
+		return 0, 0, "", ErrNotFound
 	}
 	st, code := j.Status()
 
-	return st, int32(code), nil
+	cmd := append([]string{j.Command}, j.Args...)
+	return st, int32(code), strings.Join(cmd, " "), nil
 }
 
+// Logs returns log reader for job id
 func (s *JobSupervisor) Logs(id string) (io.ReadCloser, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -139,6 +157,7 @@ func (s *JobSupervisor) Logs(id string) (io.ReadCloser, error) {
 	return j.Logs()
 }
 
+// remove deletes the job id from internal storage
 func (s *JobSupervisor) remove(id string) (*job.Job, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -150,6 +169,7 @@ func (s *JobSupervisor) remove(id string) (*job.Job, error) {
 	return j, nil
 }
 
+// add the job id to internal storage
 func (s *JobSupervisor) add(j *job.Job) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -157,6 +177,7 @@ func (s *JobSupervisor) add(j *job.Job) {
 	s.jobs[j.ID] = j
 }
 
+// Cleanup does cleanup for job id and unlinks it
 func (s *JobSupervisor) Cleanup(id string) error {
 	j, err := s.remove(id)
 	if err != nil {
@@ -172,6 +193,7 @@ func (s *JobSupervisor) Cleanup(id string) error {
 	return nil
 }
 
+// createJob is an internal wrapper for job.New(..)
 func createJob(cmd string, args []string, limits job.ExecLimits, ids job.ExecIdentity) (*job.Job, error) {
 	return job.New(cmd, args,
 		job.Cpu(limits.CPU), job.Mem(limits.MaxRamBytes), job.IO(limits.MaxDiskIOBytes),
@@ -179,6 +201,7 @@ func createJob(cmd string, args []string, limits job.ExecLimits, ids job.ExecIde
 		job.Log(zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})))
 }
 
+// Active returns true, if the job process is still running
 func (s *JobSupervisor) Active(id string) bool {
 	s.lock.RLock()
 	defer s.lock.RUnlock()

@@ -94,10 +94,10 @@ type Job struct {
 	// path to the inner cgroup controller used by the job
 	cgroupInner string
 
-	// job command. without args
-	command string
+	// job Command. without Args
+	Command string
 	// job arguments
-	args []string
+	Args []string
 
 	// Cmd object to represent the job process
 	cmd *exec.Cmd
@@ -130,7 +130,7 @@ func (j *Job) ExitCode() (int, bool) {
 	return 0, false
 }
 
-// New creates a new job to execute command 'cmd' with extra options opts.
+// New creates a new job to execute Command 'cmd' with extra options opts.
 func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 
 	j := &Job{
@@ -151,8 +151,8 @@ func New(cmd string, args []string, opts ...Option) (_ *Job, reterr error) {
 		o(j)
 	}
 
-	j.command = cmd
-	j.args = args
+	j.Command = cmd
+	j.Args = args
 
 	if err := j.initJobDirs(); err != nil {
 		return nil, fmt.Errorf("failed to create job: %w", err)
@@ -283,15 +283,15 @@ func (j *Job) initJobDirs() error {
 // cmdArgs creates a string slice of arguments to be passed to the shim process.
 func (j *Job) cmdArgs() []string {
 	rt := []string{"--mode=shim",
-		fmt.Sprintf("--cmd=%s", j.command),
+		fmt.Sprintf("--cmd=%s", j.Command),
 		fmt.Sprintf("--cgroup=%s", j.cgroupInner),
 		fmt.Sprintf("--uid=%d", j.ids.UID),
 		fmt.Sprintf("--gid=%d", j.ids.GID),
 	}
 
-	if len(j.args) > 0 {
+	if len(j.Args) > 0 {
 		rt = append(rt, "--")
-		rt = append(rt, j.args...)
+		rt = append(rt, j.Args...)
 	}
 
 	return rt

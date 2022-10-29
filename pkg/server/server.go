@@ -130,7 +130,10 @@ func (j *JobServer) Remove(ctx context.Context, req *pb.RemoveRequest) (*pb.Remo
 	return &pb.RemoveResponse{}, j.jobs.Remove(req.JobId)
 }
 
-// Inspect implements API Inspect method
+// Inspect implements GRPC Inspect method
+// error is returned if:
+//   - request user is not authorized for read access to the job
+//   - job is not found
 func (j *JobServer) Inspect(ctx context.Context, req *pb.InspectRequest) (*pb.InspectResponse, error) {
 
 	cid, ok := authID(ctx)
@@ -142,19 +145,21 @@ func (j *JobServer) Inspect(ctx context.Context, req *pb.InspectRequest) (*pb.In
 		log.Info().Str("client", cid).Str("job", req.JobId).Msg("no access")
 		return nil, status.Error(codes.Internal, "job not found")
 	}
-	st, code, err := j.jobs.Inspect(req.JobId)
+	st, code, cmd, err := j.jobs.Inspect(req.JobId)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to get job details")
 	}
 
 	return &pb.InspectResponse{
 		Details: &pb.Details{
+			Command:  cmd,
 			Status:   fromJobStatus(st),
 			ExitCode: code,
 		},
 	}, nil
 }
 
+// fromJobStatus converts job status internal enum -> GRPC
 func fromJobStatus(st job.Status) pb.Status {
 	switch st {
 	case job.StatusActive:
@@ -170,6 +175,10 @@ func fromJobStatus(st job.Status) pb.Status {
 	}
 }
 
+// Logs implements GRPC Logs method
+// error is returned if:
+//   - request user is not authorized for read access to the job
+//   - job is not found
 func (j *JobServer) Logs(req *pb.LogsRequest, server pb.JobService_LogsServer) error {
 
 	cid, ok := authID(server.Context())
