@@ -1,0 +1,4 @@
+server: "[::1]:7799"
+capath: integration/assets/cert/ca/rootCA.pem
+cert: integration/assets/cert/client/john-cert.pem
+key: integration/assets/cert/client/john-key.pem

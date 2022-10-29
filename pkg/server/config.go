@@ -70,11 +70,11 @@ func FindConfig(file string) (*Config, error) {
 		conf.TLS.ReloadSec = 30
 	}
 
-	if f := pflag.Lookup("uid"); f != nil {
+	if f := pflag.Lookup("uid"); f != nil && f.Changed {
 		conf.IDs.UID = f.Value.String()
 	}
 
-	if f := pflag.Lookup("gid"); f != nil {
+	if f := pflag.Lookup("gid"); f != nil && f.Changed {
 		conf.IDs.GID = f.Value.String()
 	}
 

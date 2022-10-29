@@ -1,7 +1,0 @@
-tls:
-  capath: cert/oldcert/rootCA.pem
-  cert: cert/oldcert/localhost.pem
-  key: cert/oldcert/localhost-key.pem
-ids:
-  uid: ilyaz
-  gid: ilyaz

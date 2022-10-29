@@ -1,10 +1,18 @@
 tls:
-  capath: /cert/oldcert/rootCA.pem
-  cert:   /cert/oldcert/localhost.pem
-  key:    /cert/oldcert/localhost-key.pem
-  reloadSec: 60
+  capath: integration/assets/cert/ca/rootCA.pem
+  cert: integration/assets/cert/server/server-cert.pem
+  key: integration/assets/cert/server/server-key.pem
+
+address: "[::1]:7799"
+
 ids:
   uid: 1000
   gid: 1000
-address: "0.0.0.0:7788"
+
+superusers:
+  full:
+    - george
+  read:
+    - george
+    - ringo
 
