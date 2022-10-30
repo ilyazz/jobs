@@ -79,8 +79,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("%+v\n", cfg)
-
 	js, err := server.New(cfg)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "failed to start the server: %v\n", err)
