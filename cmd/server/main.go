@@ -69,7 +69,7 @@ func main() {
 		_ = os.WriteFile(pidfile, []byte(fmt.Sprintf("%d", os.Getpid())), 0666)
 	}
 
-	log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+	log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).With().Timestamp().Logger()
 
 	//TODO check shim flags are not set
 
@@ -182,6 +182,7 @@ func (w wrapper) Context() context.Context {
 func streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			log.Warn().Msgf("panic recovered: %v", r)
 			err = status.Error(codes.Internal, "internal error")
 		}
 	}()
@@ -198,17 +199,27 @@ func streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.Str
 		ctx:          server.StoreAuthID(stream.Context(), cid),
 	}
 
+	lg := log.With().Str("client", cid).Logger()
+
 	defer func() {
-		log.Info().Str("client", cid).Msgf("Method %v took %v", info.FullMethod, time.Since(t0))
+		lg.Info().Msgf("Method %v took %v", info.FullMethod, time.Since(t0))
 	}()
 
-	log.Info().Str("client", cid).Msgf("Calling %v", info.FullMethod)
+	lg.Info().Msgf("Calling %v", info.FullMethod)
 
 	return handler(srv, wctx)
 }
 
 // interceptor provides timing, panic recovery, and adds client ID to the context
 func interceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warn().Msgf("panic recovered: %v", r)
+			err = status.Error(codes.Internal, "internal error")
+			resp = nil
+		}
+	}()
+
 	t0 := time.Now()
 
 	cid, err := clientID(ctx)
@@ -218,15 +229,10 @@ func interceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInf
 
 	ctx = server.StoreAuthID(ctx, cid)
 
-	defer func() {
-		log.Info().Str("client", cid).Msgf("Method %v took %v", info.FullMethod, time.Since(t0))
-	}()
+	lg := log.With().Str("client", cid).Logger()
 
 	defer func() {
-		if r := recover(); r != nil {
-			err = status.Error(codes.Internal, "internal error")
-			resp = nil
-		}
+		lg.Info().Msgf("Method %v took %v", info.FullMethod, time.Since(t0))
 	}()
 
 	log.Info().Str("client", cid).Msgf("Calling %v", info.FullMethod)
