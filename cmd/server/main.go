@@ -9,6 +9,8 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	pb "github.com/ilyazz/jobs/pkg/api/grpc/jobs/v1"
@@ -133,14 +135,26 @@ func main() {
 	}
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	var doneWg sync.WaitGroup
 
 	go func() {
 		<-sigCh
 		log.Info().Msg("stopping the server ...")
-		js.StopServer()
-		log.Info().Msg("server stopped")
-		os.Exit(0)
+		doneWg.Add(2)
+
+		go func() {
+			defer doneWg.Done()
+			srv.GracefulStop()
+			log.Info().Msg("GRPC server stopped")
+		}()
+
+		go func() {
+			defer doneWg.Done()
+			js.StopServer()
+			log.Info().Msg("job server stopped")
+		}()
 	}()
 
 	log.Info().Msgf("listening on %v", cfg.Address)
@@ -149,6 +163,9 @@ func main() {
 		log.Error().Err(err).Msg("failed to serve")
 		os.Exit(1)
 	}
+
+	doneWg.Wait()
+	log.Info().Msg("all done.")
 }
 
 // clientID extracts a client ID from GRPC context
