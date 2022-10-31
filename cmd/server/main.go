@@ -102,10 +102,13 @@ func main() {
 	cas := x509.NewCertPool()
 	ca, err := os.ReadFile(cfg.TLS.CAPath)
 	if err != nil {
-		log.Warn().Err(err).Msg("failed to load CA cert")
+		log.Error().Err(err).Msg("failed to load CA cert")
 		os.Exit(1)
 	}
-	cas.AppendCertsFromPEM(ca)
+	if !cas.AppendCertsFromPEM(ca) {
+		log.Error().Msg("failed to add CA cert")
+		os.Exit(1)
+	}
 
 	tlsCfg := &tls.Config{
 		ClientCAs:  cas,
