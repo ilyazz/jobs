@@ -1,0 +1,14 @@
+tls:
+  capath: assets/cert/ca/rootCA.pem
+  cert: assets/cert/server/server-cert.pem
+  key: assets/cert/server/server-key.pem
+
+address: "localhost:7799"
+
+superusers:
+  full:
+    - george
+  read:
+    - george
+    - ringo
+

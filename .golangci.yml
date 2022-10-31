@@ -1,0 +1,56 @@
+issues:
+  exclude-rules:
+    - linters:
+        - gosimple
+      text: "S1002: should omit comparison to bool constant"
+    - linters:
+        - revive
+      text: "exported: exported const"
+    - path: lib/services/role_test.go
+      linters:
+        - goimports
+  exclude-use-default: true
+  max-same-issues: 0
+  max-issues-per-linter: 0
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - depguard
+    - gci
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - unconvert
+    - unused
+
+linters-settings:
+  depguard:
+    list-type: denylist
+    include-go-root: true # check against stdlib
+    packages-with-error-message:
+      - io/ioutil: 'use "io" or "os" packages instead'
+      - github.com/golang/protobuf: 'use "google.golang.org/protobuf"'
+      - github.com/siddontang/go-log/log: 'use "github.com/sirupsen/logrus" instead'
+      - go.uber.org/atomic: 'use "sync/atomic" instead'
+  misspell:
+    locale: US
+  gci:
+    sections:
+      - standard # Standard section: captures all standard packages.
+      - default # Default section: contains all imports that could not be matched to another section type.
+      - prefix(github.com/gravitational/teleport) # Custom section: groups all imports with the specified Prefix.
+    skip-generated: true # Skip generated files.
+    custom-order: true # Required for "sections" to take effect.
+output:
+  uniq-by-line: false
+
+run:
+  skip-dirs-use-default: false
+  timeout: 5m
+  go: '1.19'

@@ -1,0 +1,18 @@
+tls:
+  capath: integration/assets/cert/ca/rootCA.pem
+  cert: integration/assets/cert/server/server-cert.pem
+  key: integration/assets/cert/server/server-key.pem
+
+address: "[::1]:7799"
+
+ids:
+  uid: 1000
+  gid: 1000
+
+superusers:
+  full:
+    - george
+  read:
+    - george
+    - ringo
+
